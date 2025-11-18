@@ -11,8 +11,8 @@
 #include <string.h>
 
 // Wi-Fi credentials (Delete these before commiting to GitHub)
-static const char* WIFI_SSID     = "";
-static const char* WIFI_PASSWORD = "";
+static const char* WIFI_SSID     = "TP-Link_70AB";
+static const char* WIFI_PASSWORD = "73522256";
 
 LilyGo_Class amoled;
 
@@ -136,6 +136,10 @@ static void update_t1_with_weather()
 
   Serial.println("Requesting SMHI data...");
   http.begin(url);
+
+  // Ask server not to gzip/compress if possible
+  http.addHeader("Accept-Encoding", "identity");
+
   int httpCode = http.GET();
 
   Serial.print("HTTP code: ");
@@ -158,27 +162,29 @@ static void update_t1_with_weather()
   Serial.println("Payload (first 300 chars):");
   Serial.println(payload.substring(0, 300));
 
-  // Visa längden på skärmen direkt så du ser att HTTP funkar
-  {
-    char info[32];
-    snprintf(info, sizeof(info), "Len: %d", payload.length());
-    lv_label_set_text(t1_label, info);
+  // --- CRUCIAL: trim everything before the first '{' ---
+  int braceIndex = payload.indexOf('{');
+  if (braceIndex < 0) {
+    Serial.println("No '{' found in payload, not JSON?");
+    lv_label_set_text(t1_label, "No JSON");
     lv_obj_center(t1_label);
-  }
-
-  // Om svaret inte ens börjar med '{' → inte JSON (något fel från servern)
-  if (!payload.startsWith("{")) {
-    Serial.println("Payload does not look like JSON");
-    // lämna "Len: X" på skärmen
     return;
   }
 
-  // SMHI-jsonen är fet. Du har PSRAM på den här brädan, så vi kan vara grova.
-  DynamicJsonDocument doc(220000);
+  if (braceIndex > 0) {
+    Serial.print("Trimming leading bytes before JSON: ");
+    Serial.println(braceIndex);
+    payload.remove(0, braceIndex);
+  }
 
+  // Now payload should start with '{'
+  Serial.println("Payload after trim (first 200 chars):");
+  Serial.println(payload.substring(0, 200));
+
+    DynamicJsonDocument doc(220000);
   DeserializationError err = deserializeJson(doc, payload);
   if (err) {
-    Serial.print("JSON error: ");
+    Serial.print("JSON error AFTER trim: ");
     Serial.println(err.c_str());
 
     char buf[64];
@@ -188,15 +194,19 @@ static void update_t1_with_weather()
     return;
   }
 
+  JsonObject first;  // this will be the object we read temp from
+
   JsonArray timeSeries = doc["timeSeries"];
-  if (timeSeries.isNull() || timeSeries.size() == 0) {
-    Serial.println("timeSeries missing/empty");
-    lv_label_set_text(t1_label, "No data");
-    lv_obj_center(t1_label);
-    return;
+  if (!timeSeries.isNull() && timeSeries.size() > 0) {
+    // Normal SMHI structure: root has "timeSeries"
+    Serial.println("Using doc[\"timeSeries\"][0]");
+    first = timeSeries[0];
+  } else {
+    // Fallback: root IS the forecast object
+    Serial.println("No timeSeries array, using root object as forecast");
+    first = doc.as<JsonObject>();
   }
 
-  JsonObject first = timeSeries[0];
   const char* validTime = first["validTime"] | "N/A";
 
   float temp = NAN;
@@ -232,11 +242,14 @@ static void update_t1_with_weather()
 }
 
 
+
+
  
 
 void setup()
 {
   Serial.begin(115200);
+  Serial.println("BOOTING...");
   delay(200);
 
   if (!amoled.begin()) {
