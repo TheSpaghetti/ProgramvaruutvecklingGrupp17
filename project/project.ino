@@ -16,16 +16,29 @@ static const char* WIFI_PASSWORD = "73522256";
 
 LilyGo_Class amoled;
 
+// --- Tiles ---
 static lv_obj_t* tileview;
 static lv_obj_t* t1;
 static lv_obj_t* t2;
-static lv_obj_t* t1_label;
-static lv_obj_t* t2_label;
-static bool t2_dark = false;  // start tile #2 in light mode
 static lv_obj_t* t3;
 static lv_obj_t* t4;
-static lv_obj_t* t3_label;
-static lv_obj_t* t4_label;
+
+static lv_obj_t* t1_label;
+static lv_obj_t* t2_label;
+
+// Tile 2 state
+static bool t2_dark = false;  // start tile #2 in light mode
+
+// --- Tile 3: historical chart + slider ---
+static lv_obj_t* t3_chart = nullptr;
+static lv_obj_t* t3_slider = nullptr;
+static lv_chart_series_t* t3_series = nullptr;
+
+static const int HIST_MAX_POINTS = 256;
+static float hist_values[HIST_MAX_POINTS];
+static int hist_count = 0;       // how many valid points in hist_values[]
+static int hist_window = 50;     // how many points to show at once
+
 static const char* PROGRAM_VERSION = "v.1.0.0";
 static const char* GROUP_NUMBER ="Group 17";
 
@@ -60,10 +73,99 @@ static void on_tile2_clicked(lv_event_t* e)
   t2_dark = !t2_dark;
   apply_tile_colors(t2, t2_label, t2_dark);
 }
+// ------------------------------------------------------
+// Tile 3 – historical chart helpers
+// ------------------------------------------------------
 
-// ------------------------------------------------------
-// UI setup
-// ------------------------------------------------------
+// Re-render the chart based on slider value
+static void t3_update_chart_window(int start_index)
+{
+  if (!t3_chart || !t3_series) return;
+  if (hist_count <= 0) return;
+  if (hist_window <= 0) hist_window = 1;
+
+  // Clamp start so we don't read out of bounds
+  if (start_index < 0) start_index = 0;
+  if (start_index > hist_count - hist_window) {
+    start_index = max(0, hist_count - hist_window);
+  }
+
+  // Set chart point count to window size
+  lv_chart_set_point_count(t3_chart, hist_window);
+
+  // Fill series by index instead of "clearing"
+  for (int i = 0; i < hist_window; ++i) {
+    int idx = start_index + i;
+    lv_coord_t v = LV_CHART_POINT_NONE;
+    if (idx < hist_count) {
+      v = (lv_coord_t)hist_values[idx];
+    }
+    lv_chart_set_value_by_id(t3_chart, t3_series, i, v);
+  }
+
+  lv_chart_refresh(t3_chart);
+}
+
+// Slider event: move window over data
+static void t3_slider_event_cb(lv_event_t* e)
+{
+  lv_event_code_t code = lv_event_get_code(e);
+  lv_obj_t* slider = lv_event_get_target(e);
+
+  // While pressing the slider, turn off tileview scrolling
+  if (code == LV_EVENT_PRESSED || code == LV_EVENT_PRESSING) {
+    if (tileview) {
+      lv_obj_clear_flag(tileview, LV_OBJ_FLAG_SCROLLABLE);
+    }
+  }
+
+  // When finger leaves slider, re-enable tileview scrolling
+  if (code == LV_EVENT_RELEASED || code == LV_EVENT_PRESS_LOST) {
+    if (tileview) {
+      lv_obj_add_flag(tileview, LV_OBJ_FLAG_SCROLLABLE);
+    }
+  }
+
+  if (code == LV_EVENT_VALUE_CHANGED) {
+    int pos = lv_slider_get_value(slider);
+    t3_update_chart_window(pos);
+  }
+}
+
+
+// Fill hist_values[] with dummy data so UI can be tested
+// (Replace later with real SMHI "latest-months" parsing)
+static void fill_dummy_historical_data()
+{
+  hist_count = HIST_MAX_POINTS;
+  for (int i = 0; i < hist_count; ++i) {
+    // some sine-ish wave between -5 and +15
+    float x = (float)i / 10.0f;
+    hist_values[i] = 5.0f + 10.0f * sinf(x * 0.5f);
+  }
+
+  // window size: up to 50 points or all if fewer
+  hist_window = min(50, hist_count);
+}
+
+// Call this after data is loaded to init slider + chart content
+static void t3_bind_data_to_ui()
+{
+  if (!t3_slider || !t3_chart || !t3_series) return;
+  if (hist_count <= 0) return;
+
+  int max_start = max(0, hist_count - hist_window);
+
+  // Slider: 0 => oldest window, max => latest window
+  lv_slider_set_range(t3_slider, 0, max_start);
+  lv_slider_set_value(t3_slider, max_start, LV_ANIM_OFF);
+
+  // Start showing latest window by default
+  t3_update_chart_window(max_start);
+}
+
+
+
 // ------------------------------------------------------
 // UI setup
 // ------------------------------------------------------
@@ -81,7 +183,7 @@ static void create_ui()
   t4 = lv_tileview_add_tile(tileview, 3, 0, LV_DIR_HOR);
 
   // --------------------------------------------------
-  // Tile #1 – current / simple forecast (already used)
+  // Tile #1 – simple forecast label
   // --------------------------------------------------
   {
     t1_label = lv_label_create(t1);
@@ -92,7 +194,7 @@ static void create_ui()
   }
 
   // --------------------------------------------------
-  // Tile #2 – welcome / interaction demo
+  // Tile #2 – welcome / click to toggle colors
   // --------------------------------------------------
   {
     t2_label = lv_label_create(t2);
@@ -103,30 +205,63 @@ static void create_ui()
     apply_tile_colors(t2, t2_label, /*dark=*/false);
     lv_obj_add_flag(t2, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(t2, on_tile2_clicked, LV_EVENT_CLICKED, NULL);
-  } 
-
-  // --------------------------------------------------
-  // Tile #3 – placeholder for historical data view
-  // --------------------------------------------------
-  {
-    t3_label = lv_label_create(t3);
-    lv_label_set_text(t3_label, "Historical data (tile 3)\nWIP");
-    lv_obj_set_style_text_font(t3_label, &lv_font_montserrat_28, 0);
-    lv_obj_center(t3_label);
-    apply_tile_colors(t3, t3_label, /*dark=*/false);
   }
 
-  // --------------------------------------------------
-  // Tile #4 – placeholder for settings screen
+    // --------------------------------------------------
+  // Tile #3 – historical data: chart + slider
   // --------------------------------------------------
   {
-    t4_label = lv_label_create(t4);
-    lv_label_set_text(t4_label, "Settings (tile 4)\nWIP");
-    lv_obj_set_style_text_font(t4_label, &lv_font_montserrat_28, 0);
-    lv_obj_center(t4_label);
-    apply_tile_colors(t4, t4_label, /*dark=*/false);
+    // Background + base style using same helper
+    lv_obj_t* tmp_label = lv_label_create(t3);  // just for text color
+    lv_label_set_text(tmp_label, "");
+    apply_tile_colors(t3, tmp_label, /*dark=*/false);
+    lv_obj_del(tmp_label);  // we don't need the label
+
+    // Chart
+    t3_chart = lv_chart_create(t3);
+    lv_obj_set_size(t3_chart,
+                    lv_pct(95),    // width
+                    lv_pct(65));   // height
+    lv_obj_align(t3_chart, LV_ALIGN_TOP_MID, 0, 10);
+
+    lv_chart_set_type(t3_chart, LV_CHART_TYPE_LINE);
+    lv_chart_set_div_line_count(t3_chart, 4, 4);
+    lv_chart_set_update_mode(t3_chart, LV_CHART_UPDATE_MODE_SHIFT);
+
+    // y-axis range — adjust if you know real data range
+    lv_chart_set_range(t3_chart, LV_CHART_AXIS_PRIMARY_Y, -10, 30);
+
+    // Series
+    t3_series = lv_chart_add_series(t3_chart, lv_color_black(), LV_CHART_AXIS_PRIMARY_Y);
+
+    // Label to show what parameter/city (placeholder)
+    lv_obj_t* title = lv_label_create(t3);
+    lv_label_set_text(title, "Historical (dummy data)");
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
+    lv_obj_align_to(title, t3_chart, LV_ALIGN_OUT_TOP_LEFT, 5, -5);
+
+t3_slider = lv_slider_create(t3);
+lv_obj_set_size(t3_slider, lv_pct(90), 60);   // width: 90% of screen, height: 60px
+lv_obj_align(t3_slider, LV_ALIGN_BOTTOM_MID, 0, -10);
+lv_obj_set_style_pad_all(t3_slider, 15, LV_PART_KNOB);  // bigger knob hitbox
+lv_slider_set_range(t3_slider, 0, 100);  // real range set after data load
+lv_obj_add_event_cb(t3_slider, t3_slider_event_cb, LV_EVENT_ALL, NULL);
+
+  }
+
+
+  // --------------------------------------------------
+  // Tile #4 – settings placeholder
+  // --------------------------------------------------
+  {
+    lv_obj_t* label = lv_label_create(t4);
+    lv_label_set_text(label, "Settings (tile 4)\nWIP");
+    lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
+    lv_obj_center(label);
+    apply_tile_colors(t4, label, /*dark=*/false);
   }
 }
+
 
 
 // ------------------------------------------------------
@@ -312,7 +447,12 @@ void setup()
   create_ui();
   connect_wifi();
   update_t1_with_weather();
+
+  // --- Tile 3: prepare some data and bind to chart ---
+  fill_dummy_historical_data();   // later: replace with real SMHI call
+  t3_bind_data_to_ui();
 }
+
 
 void loop()
 {
