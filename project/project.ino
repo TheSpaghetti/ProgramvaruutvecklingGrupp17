@@ -22,6 +22,10 @@ static lv_obj_t* t2;
 static lv_obj_t* t1_label;
 static lv_obj_t* t2_label;
 static bool t2_dark = false;  // start tile #2 in light mode
+static lv_obj_t* t3;
+static lv_obj_t* t4;
+static lv_obj_t* t3_label;
+static lv_obj_t* t4_label;
 static const char* PROGRAM_VERSION = "v.1.0.0";
 static const char* GROUP_NUMBER ="Group 17";
 
@@ -60,6 +64,9 @@ static void on_tile2_clicked(lv_event_t* e)
 // ------------------------------------------------------
 // UI setup
 // ------------------------------------------------------
+// ------------------------------------------------------
+// UI setup
+// ------------------------------------------------------
 static void create_ui()
 {
   // Fullscreen Tileview
@@ -67,11 +74,15 @@ static void create_ui()
   lv_obj_set_size(tileview, lv_disp_get_hor_res(NULL), lv_disp_get_ver_res(NULL));
   lv_obj_set_scrollbar_mode(tileview, LV_SCROLLBAR_MODE_OFF);
 
-  // Add two horizontal tiles
+  // Add four horizontal tiles: 0,1,2,3
   t1 = lv_tileview_add_tile(tileview, 0, 0, LV_DIR_HOR);
   t2 = lv_tileview_add_tile(tileview, 1, 0, LV_DIR_HOR);
+  t3 = lv_tileview_add_tile(tileview, 2, 0, LV_DIR_HOR);
+  t4 = lv_tileview_add_tile(tileview, 3, 0, LV_DIR_HOR);
 
-  // Tile #1
+  // --------------------------------------------------
+  // Tile #1 – current / simple forecast (already used)
+  // --------------------------------------------------
   {
     t1_label = lv_label_create(t1);
     lv_label_set_text(t1_label, "Laddar väder...");
@@ -80,7 +91,9 @@ static void create_ui()
     apply_tile_colors(t1, t1_label, /*dark=*/false);
   }
 
-  // Tile #2
+  // --------------------------------------------------
+  // Tile #2 – welcome / interaction demo
+  // --------------------------------------------------
   {
     t2_label = lv_label_create(t2);
     lv_label_set_text(t2_label, "Welcome to the workshop");
@@ -90,8 +103,31 @@ static void create_ui()
     apply_tile_colors(t2, t2_label, /*dark=*/false);
     lv_obj_add_flag(t2, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_add_event_cb(t2, on_tile2_clicked, LV_EVENT_CLICKED, NULL);
+  } 
+
+  // --------------------------------------------------
+  // Tile #3 – placeholder for historical data view
+  // --------------------------------------------------
+  {
+    t3_label = lv_label_create(t3);
+    lv_label_set_text(t3_label, "Historical data (tile 3)\nWIP");
+    lv_obj_set_style_text_font(t3_label, &lv_font_montserrat_28, 0);
+    lv_obj_center(t3_label);
+    apply_tile_colors(t3, t3_label, /*dark=*/false);
+  }
+
+  // --------------------------------------------------
+  // Tile #4 – placeholder for settings screen
+  // --------------------------------------------------
+  {
+    t4_label = lv_label_create(t4);
+    lv_label_set_text(t4_label, "Settings (tile 4)\nWIP");
+    lv_obj_set_style_text_font(t4_label, &lv_font_montserrat_28, 0);
+    lv_obj_center(t4_label);
+    apply_tile_colors(t4, t4_label, /*dark=*/false);
   }
 }
+
 
 // ------------------------------------------------------
 // WiFi
