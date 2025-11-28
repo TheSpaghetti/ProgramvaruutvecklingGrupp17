@@ -27,7 +27,7 @@ static lv_obj_t* forecast_table = nullptr;
 // (REMOVE before pushing to GitHub)
 // ------------------------
 static const char* WIFI_SSID     = "BTH_Guest";
-static const char* WIFI_PASSWORD = "oliv95lila";
+static const char* WIFI_PASSWORD = "papaya21turkos";
 
 LilyGo_Class amoled;
 
@@ -54,21 +54,8 @@ static float hist_values[HIST_MAX_POINTS];
 static int   hist_count  = 0;   // how many valid points in hist_values[]
 static int   hist_window = 50;  // how many points to show at once
 
-static const char* PROGRAM_VERSION = "v.1.0.0";
+static const char* PROGRAM_VERSION = "v.1.0.1";
 static const char* GROUP_NUMBER    = "Group 17";
-
-// ------------------------------------------------------
-// Start screen
-// ------------------------------------------------------
-static void show_start_screen()
-{
-    lv_obj_t* scr = lv_scr_act();  // current (default) screen
-
-    lv_obj_t* label = lv_label_create(scr);
-    lv_label_set_text_fmt(label, "Version: %s\n%s", PROGRAM_VERSION, GROUP_NUMBER);
-    lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
-    lv_obj_center(label);
-}
 
 // ------------------------------------------------------
 // SMHI symbol → simple UTF-8 icon mapping
@@ -352,97 +339,94 @@ static void create_forecast_table(lv_obj_t* parent) {
 // ------------------------------------------------------
 static void create_ui()
 {
-    // Fullscreen Tileview
+    // Create full screen tileview container
     tileview = lv_tileview_create(lv_scr_act());
     lv_obj_set_size(tileview, lv_disp_get_hor_res(NULL), lv_disp_get_ver_res(NULL));
     lv_obj_set_scrollbar_mode(tileview, LV_SCROLLBAR_MODE_OFF);
 
-    // Add four horizontal tiles: 0,1,2,3
+    // Four tiles horizontally (0,1,2,3)
     t1 = lv_tileview_add_tile(tileview, 0, 0, LV_DIR_HOR);
     t2 = lv_tileview_add_tile(tileview, 1, 0, LV_DIR_HOR);
     t3 = lv_tileview_add_tile(tileview, 2, 0, LV_DIR_HOR);
     t4 = lv_tileview_add_tile(tileview, 3, 0, LV_DIR_HOR);
 
     // --------------------------------------------------
-    // Tile #1 – label top, 7-day table bottom
+    // Tile 1 – Information screen
     // --------------------------------------------------
     {
         t1_label = lv_label_create(t1);
-        lv_label_set_text(t1_label, "Laddar väder...");
-        lv_obj_set_style_text_font(t1_label, &lv_font_montserrat_22, 0);
-        lv_obj_align(t1_label, LV_ALIGN_TOP_MID, 0, 5);
+        lv_label_set_text_fmt(t1_label,
+                              "Weather App\n%s\n%s",
+                              PROGRAM_VERSION,
+                              GROUP_NUMBER);
+        lv_obj_set_style_text_font(t1_label, &lv_font_montserrat_28, 0);
+        lv_obj_center(t1_label);
 
-        apply_tile_colors(t1, t1_label, /*dark=*/false);
-        create_forecast_table(t1);
+        apply_tile_colors(t1, t1_label, false);
     }
 
     // --------------------------------------------------
-    // Tile #2 – welcome / click to toggle colors
+    // Tile 2 – Forecast screen
     // --------------------------------------------------
     {
         t2_label = lv_label_create(t2);
-        lv_label_set_text(t2_label, "Welcome to the workshop");
-        lv_obj_set_style_text_font(t2_label, &lv_font_montserrat_28, 0);
-        lv_obj_center(t2_label);
+        lv_label_set_text(t2_label, "Loading weather...");
+        lv_obj_set_style_text_font(t2_label, &lv_font_montserrat_22, 0);
+        lv_obj_align(t2_label, LV_ALIGN_TOP_MID, 0, 5);
 
-        apply_tile_colors(t2, t2_label, /*dark=*/false);
-        lv_obj_add_flag(t2, LV_OBJ_FLAG_CLICKABLE);
-        lv_obj_add_event_cb(t2, on_tile2_clicked, LV_EVENT_CLICKED, NULL);
+        apply_tile_colors(t2, t2_label, false);
+        create_forecast_table(t2);   // Forecast table now belongs to Tile 2
     }
 
     // --------------------------------------------------
-    // Tile #3 – historical data: chart + slider
+    // Tile 3 – Historical Data
     // --------------------------------------------------
     {
-        // Background + base style using same helper
-        lv_obj_t* tmp_label = lv_label_create(t3);  // just for text color
+        // Prepare base style
+        lv_obj_t* tmp_label = lv_label_create(t3);
         lv_label_set_text(tmp_label, "");
-        apply_tile_colors(t3, tmp_label, /*dark=*/false);
-        lv_obj_del(tmp_label);  // we don't need the label
+        apply_tile_colors(t3, tmp_label, false);
+        lv_obj_del(tmp_label);
 
-        // Chart
+        // Temperature chart
         t3_chart = lv_chart_create(t3);
-        lv_obj_set_size(t3_chart,
-                        lv_pct(95),    // width
-                        lv_pct(65));   // height
+        lv_obj_set_size(t3_chart, lv_pct(95), lv_pct(65));
         lv_obj_align(t3_chart, LV_ALIGN_TOP_MID, 0, 10);
 
         lv_chart_set_type(t3_chart, LV_CHART_TYPE_LINE);
         lv_chart_set_div_line_count(t3_chart, 4, 4);
         lv_chart_set_update_mode(t3_chart, LV_CHART_UPDATE_MODE_SHIFT);
-
-        // y-axis range — adjust if you know real data range
         lv_chart_set_range(t3_chart, LV_CHART_AXIS_PRIMARY_Y, -10, 30);
 
-        // Series
         t3_series = lv_chart_add_series(t3_chart, lv_color_black(), LV_CHART_AXIS_PRIMARY_Y);
 
-        // Label to show what parameter/city (placeholder)
         lv_obj_t* title = lv_label_create(t3);
-        lv_label_set_text(title, "Historical (dummy data)");
+        lv_label_set_text(title, "Historical Data");
         lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
         lv_obj_align_to(title, t3_chart, LV_ALIGN_OUT_TOP_LEFT, 5, -5);
 
-        // Slider
+        // Data position slider
         t3_slider = lv_slider_create(t3);
-        lv_obj_set_size(t3_slider, lv_pct(90), 60);   // width: 90% of screen, height: 60px
+        lv_obj_set_size(t3_slider, lv_pct(90), 60);
         lv_obj_align(t3_slider, LV_ALIGN_BOTTOM_MID, 0, -10);
-        lv_obj_set_style_pad_all(t3_slider, 15, LV_PART_KNOB);  // bigger knob hitbox
-        lv_slider_set_range(t3_slider, 0, 100);  // real range set after data load
+        lv_obj_set_style_pad_all(t3_slider, 15, LV_PART_KNOB);
+        lv_slider_set_range(t3_slider, 0, 100);
         lv_obj_add_event_cb(t3_slider, t3_slider_event_cb, LV_EVENT_ALL, NULL);
     }
 
     // --------------------------------------------------
-    // Tile #4 – settings placeholder
+    // Tile 4 – Settings Screen
     // --------------------------------------------------
     {
         lv_obj_t* label = lv_label_create(t4);
-        lv_label_set_text(label, "Settings (tile 4)\nWIP");
+        lv_label_set_text(label, "Settings");
         lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
         lv_obj_center(label);
-        apply_tile_colors(t4, label, /*dark=*/false);
+
+        apply_tile_colors(t4, label, false);
     }
 }
+
 
 // ------------------------------------------------------
 // WiFi
@@ -471,12 +455,12 @@ static void connect_wifi()
 // ------------------------------------------------------
 // SMHI → T1 label + 7-day table
 // ------------------------------------------------------
-static void update_t1_with_weather()
+static void update_t2_with_weather()
 {
     if (WiFi.status() != WL_CONNECTED) {
         Serial.println("update_t1_with_weather: WiFi not connected");
-        lv_label_set_text(t1_label, "WiFi fail");
-        lv_obj_align(t1_label, LV_ALIGN_TOP_MID, 0, 5);
+        lv_label_set_text(t2_label, "WiFi fail");
+        lv_obj_align(t2_label, LV_ALIGN_TOP_MID, 0, 5);
         return;
     }
 
@@ -502,8 +486,8 @@ static void update_t1_with_weather()
 
     if (httpCode != HTTP_CODE_OK) {
         Serial.printf("HTTP error: %d\n", httpCode);
-        lv_label_set_text(t1_label, "HTTP error");
-        lv_obj_align(t1_label, LV_ALIGN_TOP_MID, 0, 5);
+        lv_label_set_text(t2_label, "HTTP error");
+        lv_obj_align(t2_label, LV_ALIGN_TOP_MID, 0, 5);
         http.end();
         return;
     }
@@ -520,8 +504,8 @@ static void update_t1_with_weather()
 
         char buf[64];
         snprintf(buf, sizeof(buf), "JSON err: %s", err.c_str());
-        lv_label_set_text(t1_label, buf);
-        lv_obj_align(t1_label, LV_ALIGN_TOP_MID, 0, 5);
+        lv_label_set_text(t2_label, buf);
+        lv_obj_align(t2_label, LV_ALIGN_TOP_MID, 0, 5);
         return;
     }
 
@@ -552,8 +536,8 @@ static void update_t1_with_weather()
     JsonArray params = first["parameters"];
     if (params.isNull()) {
         Serial.println("parameters missing");
-        lv_label_set_text(t1_label, "No params");
-        lv_obj_align(t1_label, LV_ALIGN_TOP_MID, 0, 5);
+        lv_label_set_text(t2_label, "No params");
+        lv_obj_align(t2_label, LV_ALIGN_TOP_MID, 0, 5);
         return;
     }
 
@@ -574,8 +558,8 @@ static void update_t1_with_weather()
     Serial.print("Setting label: ");
     Serial.println(buf);
 
-    lv_label_set_text(t1_label, buf);
-    lv_obj_align(t1_label, LV_ALIGN_TOP_MID, 0, 5);
+    lv_label_set_text(t2_label, buf);
+    lv_obj_align(t2_label, LV_ALIGN_TOP_MID, 0, 5);
 }
 
 
@@ -595,28 +579,14 @@ void setup()
 
     beginLvglHelper(amoled);   // init LVGL for this board
 
-    // --- START SCREEN: version + group --- 
-    show_start_screen();   // create label on default screen
-
-    // Let LVGL render the splash for 0.8 seconds. 
-    uint32_t start = millis();
-    while (millis() - start < 800) {
-        lv_timer_handler();  // refresh LVGL
-        delay(5);
-    }
-
-    // Clear everything on the current screen
-    lv_obj_clean(lv_scr_act());
-
-    // --- NORMAL APP UI ---
+    
     create_ui();
     connect_wifi();
-    update_t1_with_weather();
+    update_t2_with_weather();     
 
-    // --- Tile 3: prepare some data and bind to chart ---
-    fill_dummy_historical_data();   // later: replace with real SMHI call
+    fill_dummy_historical_data();
     t3_bind_data_to_ui();
-}
+} 
 
 void loop()
 {
