@@ -21,6 +21,7 @@ struct DailyForecast {
 
 static DailyForecast forecast[7];
 static lv_obj_t* forecast_table = nullptr;
+static lv_obj_t* dropdown = nullptr;
 
 // ------------------------
 // Wi-Fi credentials
@@ -28,6 +29,7 @@ static lv_obj_t* forecast_table = nullptr;
 // ------------------------
 static const char* WIFI_SSID     = "BTH_Guest";
 static const char* WIFI_PASSWORD = "papaya21turkos";
+<<<<<<< Updated upstream
 
 // Cities: Karlskrona(65090), Stockholm(97400), Göteborg(72420), Malmö(53300), Kiruna(180940)
 
@@ -89,6 +91,8 @@ static int get_current_station_id() {
 static int get_current_param_id() {
     return PARAM_IDS[current_param_index];
 }
+=======
+>>>>>>> Stashed changes
 
 LilyGo_Class amoled;
 
@@ -345,10 +349,6 @@ static void update_forecast_from_smhi(JsonDocument& doc) {
     forecast[0].symbolCode = symbolCode;
 }
 
-
-
-
-
 static void refresh_forecast_table() {
     if (!forecast_table) return;
 
@@ -375,7 +375,8 @@ static void refresh_forecast_table() {
 // ------------------------------------------------------
 // Forecast table UI
 // ------------------------------------------------------
-static void create_forecast_table(lv_obj_t* parent) {
+static void create_forecast_table(lv_obj_t* parent)
+{
     forecast_table = lv_table_create(parent);
 
     lv_obj_set_size(forecast_table, lv_pct(100), lv_pct(80));
@@ -395,6 +396,19 @@ static void create_forecast_table(lv_obj_t* parent) {
     lv_table_set_col_width(forecast_table, 1, 80);
     lv_table_set_col_width(forecast_table, 2, 80);
 }
+
+// ------------------------------------------------------
+// Dropdown menu
+// ------------------------------------------------------
+static void create_dropdown_menu(lv_obj_t* parent)
+{
+    dropdown = lv_dropdown_create(parent);
+    
+    lv_obj_set_size(dropdown, lv_pct(50), lv_pct(10));
+    lv_obj_align(dropdown, LV_ALIGN_CENTER, 0, 0);
+    lv_dropdown_set_options(dropdown, "Temperature\nHumidity\nWind speed\nAir pressure");
+}
+
 
 // ------------------------------------------------------
 // UI setup
@@ -481,11 +495,19 @@ static void create_ui()
     // --------------------------------------------------
     {
         lv_obj_t* label = lv_label_create(t4);
+<<<<<<< Updated upstream
         lv_label_set_text(label, "Settings");
         lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
         lv_obj_center(label);
 
         apply_tile_colors(t4, label, false);
+=======
+        lv_label_set_text(label, "Customize the historical graph");
+        lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
+        lv_obj_center(label);
+        apply_tile_colors(t4, label, /*dark=*/false);
+        create_dropdown_menu(t4);
+>>>>>>> Stashed changes
     }
 }
 
