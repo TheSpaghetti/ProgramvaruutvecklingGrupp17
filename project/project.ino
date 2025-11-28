@@ -21,6 +21,7 @@ struct DailyForecast {
 
 static DailyForecast forecast[7];
 static lv_obj_t* forecast_table = nullptr;
+static lv_obj_t* dropdown = nullptr;
 
 // ------------------------
 // Wi-Fi credentials
@@ -512,6 +513,19 @@ static void create_forecast_table(lv_obj_t* parent) {
 }
 
 // ------------------------------------------------------
+// Dropdown menu
+// ------------------------------------------------------
+
+
+static void create_dropdown_menu(lv_obj_t* parent)
+{
+    dropdown = lv_dropdown_create(parent);
+    lv_obj_set_size(dropdown, lv_pct(50), lv_pct(10));
+    lv_obj_align(dropdown, LV_ALIGN_CENTER, 0, 0);
+    lv_dropdown_set_options(dropdown, "Temperature\nHumidity\nWind speed\nAir pressure");
+}
+
+// ------------------------------------------------------
 // UI setup
 // ------------------------------------------------------
 static void create_ui()
@@ -596,11 +610,11 @@ static void create_ui()
     // --------------------------------------------------
     {
         lv_obj_t* label = lv_label_create(t4);
-        lv_label_set_text(label, "Settings");
+        lv_label_set_text(label, "Customize the historical graph");
         lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
-        lv_obj_center(label);
-
-        apply_tile_colors(t4, label, false);
+        lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 5);
+        apply_tile_colors(t4, label, /*dark=*/false);
+        create_dropdown_menu(t4);
     }
 }
 
