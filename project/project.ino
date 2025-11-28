@@ -348,7 +348,6 @@ static void update_forecast_from_smhi(JsonDocument& doc) {
 
 
 
-
 static void refresh_forecast_table() {
     if (!forecast_table) return;
 
@@ -368,9 +367,125 @@ static void refresh_forecast_table() {
 
         lv_table_set_cell_value(forecast_table, row, 0, forecast[i].dayName.c_str());
         lv_table_set_cell_value(forecast_table, row, 1, tempBuf);
-        lv_table_set_cell_value(forecast_table, row, 2, smhi_symbol_to_icon(forecast[i].symbolCode));
+        lv_table_set_cell_value(forecast_table, row, 2,
+                                smhi_symbol_to_icon(forecast[i].symbolCode));
     }
 }
+
+
+
+// ------------------------
+// SMHI Historical URL (latest-months) for selected city/parameter
+// ------------------------
+static String build_smhi_hist_url()
+{
+    // Example:
+    // https://opendata-download-metobs.smhi.se/api/version/1.0/
+    //   parameter/{id}/station/{id}/period/latest-months/data.json
+    String url =
+        String("https://opendata-download-metobs.smhi.se/api/version/1.0/")
+        + "parameter/" + String(get_current_param_id())
+        + "/station/"  + String(get_current_station_id())
+        + "/period/latest-months/data.json";
+    return url;
+}
+
+static bool load_historical_data_from_smhi()
+{
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("load_historical_data_from_smhi: WiFi not connected");
+        return false;
+    }
+
+    HTTPClient http;
+    String url = build_smhi_hist_url();
+
+    Serial.print("Requesting SMHI historical data: ");
+    Serial.println(url);
+
+    http.setReuse(false);
+    http.useHTTP10(true);
+    http.begin(url);
+    http.addHeader("Accept-Encoding", "identity");
+
+    int httpCode = http.GET();
+    Serial.print("HTTP code (hist): ");
+    Serial.println(httpCode);
+
+    if (httpCode != HTTP_CODE_OK) {
+        Serial.printf("HTTP error (hist): %d\n", httpCode);
+        http.end();
+        return false;
+    }
+
+    WiFiClient& stream = http.getStream();
+
+    DynamicJsonDocument doc(220000);
+    DeserializationError err = deserializeJson(doc, stream);
+    http.end();
+
+    if (err) {
+        Serial.print("JSON error (hist): ");
+        Serial.println(err.c_str());
+        return false;
+    }
+
+    JsonArray values = doc["value"].as<JsonArray>();
+    if (values.isNull() || values.size() == 0) {
+        Serial.println("load_historical_data_from_smhi: no 'value' array");
+        return false;
+    }
+
+    int total = values.size();
+    Serial.print("Historical points from SMHI: ");
+    Serial.println(total);
+
+    // Keep at most HIST_MAX_POINTS latest values
+    int start_index = 0;
+    if (total > HIST_MAX_POINTS) {
+        start_index = total - HIST_MAX_POINTS;
+    }
+
+    hist_count = 0;
+    float min_v = 1e9f;
+    float max_v = -1e9f;
+
+    for (int i = start_index; i < total && hist_count < HIST_MAX_POINTS; ++i) {
+        JsonObject vobj = values[i].as<JsonObject>();
+        if (vobj.isNull()) continue;
+        if (vobj["value"].isNull()) continue;
+
+        float v = vobj["value"].as<float>();
+        hist_values[hist_count] = v;
+
+        if (v < min_v) min_v = v;
+        if (v > max_v) max_v = v;
+
+        hist_count++;
+    }
+
+    if (hist_count == 0) {
+        Serial.println("load_historical_data_from_smhi: no valid numeric values");
+        return false;
+    }
+
+    // Set window size
+    hist_window = min(50, hist_count);
+
+    // Adjust Y-axis range based on actual data
+    if (t3_chart) {
+        int y_min = (int)floorf(min_v - 1.0f);
+        int y_max = (int)ceilf (max_v + 1.0f);
+        if (y_min == y_max) { y_min -= 1; y_max += 1; }
+        lv_chart_set_range(t3_chart, LV_CHART_AXIS_PRIMARY_Y, y_min, y_max);
+    }
+
+    Serial.print("Historical data loaded. hist_count = ");
+    Serial.println(hist_count);
+
+    return true;
+}
+
 
 // ------------------------------------------------------
 // Forecast table UI
@@ -621,13 +736,15 @@ static void update_t2_with_weather()
     }
 
     char buf[96];
-    snprintf(buf, sizeof(buf), "Karlskrona %.1f°C / %.1f mm", temp, precip);
+    snprintf(buf, sizeof(buf), "%s %.1f°C / %.1f mm",
+            get_current_city_name(), temp, precip);
 
     Serial.print("Setting label: ");
     Serial.println(buf);
 
     lv_label_set_text(t2_label, buf);
     lv_obj_align(t2_label, LV_ALIGN_TOP_MID, 0, 5);
+
 }
 
 
@@ -650,10 +767,15 @@ void setup()
     
     create_ui();
     connect_wifi();
-    update_t2_with_weather();     
+    update_t2_with_weather();
 
-    fill_dummy_historical_data();
+    // Historical data for Tile 3
+    if (!load_historical_data_from_smhi()) {
+        Serial.println("Falling back to dummy historical data");
+        fill_dummy_historical_data();
+    }
     t3_bind_data_to_ui();
+
 } 
 
 void loop()
