@@ -29,6 +29,67 @@ static lv_obj_t* forecast_table = nullptr;
 static const char* WIFI_SSID     = "BTH_Guest";
 static const char* WIFI_PASSWORD = "papaya21turkos";
 
+// Cities: Karlskrona(65090), Stockholm(97400), Göteborg(72420), Malmö(53300), Kiruna(180940)
+
+// Names
+static const char* CITY_NAMES[5] = {
+    "Karlskrona",
+    "Stockholm",
+    "Gothenburg",
+    "Malmo",
+    "Kiruna"
+};
+
+// Station IDs for SMHI historical data
+static const int CITY_STATION_IDS[5] = {
+    65090,   // Karlskrona-Soderstjerna
+    97400,   // Stockholm-Observatorielunden
+    72420,   // Göteborg-Landvetter
+    53300,   // Malmö-A                    (closest active)
+    180940   // Kiruna-Esrange
+};
+
+// Matched forecast coordinates (LAT,LON)
+static const float CITY_LAT[5] = {
+    56.1612,   // Karlskrona
+    59.3293,   // Stockholm
+    57.7089,   // Göteborg
+    55.6050,   // Malmö
+    67.8558    // Kiruna
+};
+
+static const float CITY_LON[5] = {
+    15.5869,   // Karlskrona
+    18.0686,   // Stockholm
+    11.9746,   // Göteborg
+    13.0038,   // Malmö
+    20.2253    // Kiruna
+};
+
+// ------------------------
+// Current selections (city/parameter)
+// ------------------------
+
+// 0..4 → Karlskrona, Stockholm, Gothenburg, Malmo, Kiruna
+static int current_city_index  = 0;  // default Karlskrona
+
+// Parameters for historical data 
+static const int PARAM_IDS[4]      = { 1, 6, 4, 9 };  // temp, humidity, wind, pressure
+static const char* PARAM_LABELS[4] = { "Temperature", "Humidity", "Wind", "Pressure" };
+static int current_param_index     = 0;               // default: Temperature
+
+static const char* get_current_city_name() {
+    return CITY_NAMES[current_city_index];
+}
+
+static int get_current_station_id() {
+    return CITY_STATION_IDS[current_city_index];
+}
+
+static int get_current_param_id() {
+    return PARAM_IDS[current_param_index];
+}
+
 LilyGo_Class amoled;
 
 // --- Tiles ---
@@ -61,14 +122,15 @@ static const char* GROUP_NUMBER    = "Group 17";
 // SMHI symbol → simple UTF-8 icon mapping
 // ------------------------------------------------------
 static const char* smhi_symbol_to_icon(int code) {
-    if (code == 1)                 return "☀";   // Clear
-    if (code == 2 || code == 3)    return "🌤";  // Partly cloudy
-    if (code == 4 || code == 5)    return "☁";   // Cloudy
-    if (code == 6 || code == 7)    return "🌧";  // Rain
-    if (code == 8 || code == 9)    return "⛈";  // Thunder
-    if (code == 10 || code == 11)  return "❄";   // Snow
+    if (code == 1)                 return "SUN";    // Clear
+    if (code == 2 || code == 3)    return "PART";   // Partly cloudy
+    if (code == 4 || code == 5)    return "CLOUD";  // Cloudy
+    if (code == 6 || code == 7)    return "RAIN";   // Rain
+    if (code == 8 || code == 9)    return "THDR";   // Thunderstorm
+    if (code == 10 || code == 11)  return "SNOW";   // Snow
     return "?";
 }
+
 
 // ------------------------------------------------------
 // Helper: Tile #2 Color change
