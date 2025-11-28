@@ -527,17 +527,23 @@ static void update_t2_with_weather()
     }
 
     HTTPClient http;
-    const char* url =
-        "https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/"
-        "geotype/point/lon/15.5869/lat/56.1612/data.json";
 
-    Serial.println("Requesting SMHI data...");
+    // Build forecast URL for the currently selected city using lat/lon
+    String url =
+        String("https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/")
+        + "geotype/point/lon/" + String(CITY_LON[current_city_index], 4)
+        + "/lat/" + String(CITY_LAT[current_city_index], 4)
+        + "/data.json";
 
-    // These two lines reduce weird chunking/reuse issues
-    http.setReuse(false);      // don't reuse TCP connection
-    http.useHTTP10(true);      // force HTTP/1.0 (no chunked encoding)
+    Serial.print("Requesting SMHI forecast: ");
+    Serial.println(url);
 
+    http.setReuse(false);
+    http.useHTTP10(true);
     http.begin(url);
+    http.addHeader("Accept-Encoding", "identity");
+
+
     // you can keep this or drop it; SMHI should return plain JSON anyway
     http.addHeader("Accept-Encoding", "identity");
 
