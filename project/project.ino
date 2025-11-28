@@ -30,6 +30,7 @@ static lv_obj_t* dropdown = nullptr;
 static const char* WIFI_SSID     = "BTH_Guest";
 static const char* WIFI_PASSWORD = "papaya21turkos";
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
 
 // Cities: Karlskrona(65090), Stockholm(97400), Göteborg(72420), Malmö(53300), Kiruna(180940)
 
@@ -91,6 +92,8 @@ static int get_current_station_id() {
 static int get_current_param_id() {
     return PARAM_IDS[current_param_index];
 }
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
 
@@ -496,17 +499,23 @@ static void create_ui()
     {
         lv_obj_t* label = lv_label_create(t4);
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
         lv_label_set_text(label, "Settings");
         lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
         lv_obj_center(label);
 
         apply_tile_colors(t4, label, false);
 =======
+=======
+>>>>>>> Stashed changes
         lv_label_set_text(label, "Customize the historical graph");
         lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
         lv_obj_center(label);
         apply_tile_colors(t4, label, /*dark=*/false);
         create_dropdown_menu(t4);
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     }
 }
