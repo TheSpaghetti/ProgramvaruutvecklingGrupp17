@@ -21,7 +21,6 @@ struct DailyForecast {
 
 static DailyForecast forecast[7];
 static lv_obj_t* forecast_table = nullptr;
-static lv_obj_t* dropdown = nullptr;
 
 // ------------------------
 // Wi-Fi credentials
@@ -111,7 +110,7 @@ static lv_obj_t* t3_chart  = nullptr;
 static lv_obj_t* t3_slider = nullptr;
 static lv_chart_series_t* t3_series = nullptr;
 
-static const int HIST_MAX_POINTS = 256;
+static const int HIST_MAX_POINTS = 1028;
 static float hist_values[HIST_MAX_POINTS];
 static int   hist_count  = 0;   // how many valid points in hist_values[]
 static int   hist_window = 50;  // how many points to show at once
@@ -346,6 +345,9 @@ static void update_forecast_from_smhi(JsonDocument& doc) {
     forecast[0].symbolCode = symbolCode;
 }
 
+
+
+
 static void refresh_forecast_table() {
     if (!forecast_table) return;
 
@@ -488,8 +490,7 @@ static bool load_historical_data_from_smhi()
 // ------------------------------------------------------
 // Forecast table UI
 // ------------------------------------------------------
-static void create_forecast_table(lv_obj_t* parent)
-{
+static void create_forecast_table(lv_obj_t* parent) {
     forecast_table = lv_table_create(parent);
 
     lv_obj_set_size(forecast_table, lv_pct(100), lv_pct(80));
@@ -509,19 +510,6 @@ static void create_forecast_table(lv_obj_t* parent)
     lv_table_set_col_width(forecast_table, 1, 80);
     lv_table_set_col_width(forecast_table, 2, 80);
 }
-
-// ------------------------------------------------------
-// Dropdown menu
-// ------------------------------------------------------
-static void create_dropdown_menu(lv_obj_t* parent)
-{
-    dropdown = lv_dropdown_create(parent);
-    
-    lv_obj_set_size(dropdown, lv_pct(50), lv_pct(10));
-    lv_obj_align(dropdown, LV_ALIGN_CENTER, 0, 0);
-    lv_dropdown_set_options(dropdown, "Temperature\nHumidity\nWind speed\nAir pressure");
-}
-
 
 // ------------------------------------------------------
 // UI setup
@@ -608,14 +596,14 @@ static void create_ui()
     // --------------------------------------------------
     {
         lv_obj_t* label = lv_label_create(t4);
-        lv_label_set_text(label, "Customize the historical graph");
+        lv_label_set_text(label, "Settings");
         lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
         lv_obj_center(label);
-        apply_tile_colors(t4, label, /*dark=*/false);
-        create_dropdown_menu(t4);
 
+        apply_tile_colors(t4, label, false);
     }
 }
+
 
 // ------------------------------------------------------
 // WiFi
@@ -751,7 +739,7 @@ static void update_t2_with_weather()
     snprintf(buf, sizeof(buf), "%s %.1f°C / %.1f mm",
             get_current_city_name(), temp, precip);
 
-    Serial.print("Setting label: ");
+    Serial.print("Setting  label: ");
     Serial.println(buf);
 
     lv_label_set_text(t2_label, buf);
