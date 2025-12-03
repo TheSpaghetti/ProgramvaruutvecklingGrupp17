@@ -628,7 +628,7 @@ static void create_ui()
         // Temperature chart
         t3_chart = lv_chart_create(t3);
         lv_obj_set_size(t3_chart, lv_pct(95), lv_pct(65));
-        lv_obj_align(t3_chart, LV_ALIGN_TOP_MID, 0, 10);
+        lv_obj_align(t3_chart, LV_ALIGN_TOP_MID, 0, 50);
 
         lv_chart_set_type(t3_chart, LV_CHART_TYPE_LINE);
         lv_chart_set_div_line_count(t3_chart, 4, 4);
@@ -640,12 +640,12 @@ static void create_ui()
         lv_obj_t* title = lv_label_create(t3);
         lv_label_set_text(title, "Historical Data");
         lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
-        lv_obj_align_to(title, t3_chart, LV_ALIGN_OUT_TOP_LEFT, 5, -5);
+        lv_obj_align_to(title, t3_chart, LV_ALIGN_OUT_TOP_LEFT, 5, -10);
 
         // Data position slider
         t3_slider = lv_slider_create(t3);
-        lv_obj_set_size(t3_slider, lv_pct(90), 60);
-        lv_obj_align(t3_slider, LV_ALIGN_BOTTOM_MID, 0, -10);
+        lv_obj_set_size(t3_slider, lv_pct(80), 60);
+        lv_obj_align(t3_slider, LV_ALIGN_BOTTOM_MID, 0, -25);
         lv_obj_set_style_pad_all(t3_slider, 15, LV_PART_KNOB);
         lv_slider_set_range(t3_slider, 0, 100);
         lv_obj_add_event_cb(t3_slider, t3_slider_event_cb, LV_EVENT_ALL, NULL);
