@@ -91,6 +91,16 @@ static int get_current_param_id() {
     return PARAM_IDS[current_param_index];
 }
 
+static int set_current_station_id(int id) {
+    current_city_index = id;
+    return CITY_STATION_IDS[current_city_index];
+}
+
+static int set_current_param_id(int id) {
+    current_param_index = id;
+    return PARAM_IDS[current_param_index];
+}
+
 LilyGo_Class amoled;
 
 // --- Tiles ---
@@ -515,15 +525,51 @@ static void create_forecast_table(lv_obj_t* parent) {
 // ------------------------------------------------------
 // Dropdown menu
 // ------------------------------------------------------
-
-
-static void create_dropdown_menu(lv_obj_t* parent)
+static lv_obj_t* create_dropdown_menu(lv_obj_t* parent)
 {
     dropdown = lv_dropdown_create(parent);
-    lv_obj_set_size(dropdown, lv_pct(50), lv_pct(10));
+    lv_obj_set_size(dropdown, lv_pct(25), lv_pct(10));
     lv_obj_align(dropdown, LV_ALIGN_CENTER, 0, 0);
-    lv_dropdown_set_options(dropdown, "Temperature\nHumidity\nWind speed\nAir pressure");
+    lv_obj_add_event_cb(dropdown, dropdown_event, LV_EVENT_VALUE_CHANGED, NULL);
+    return dropdown;
 }
+
+// ------------------------------------------------------
+// Get dropdown selected index
+// ------------------------------------------------------
+static void dropdown_event(lv_event_t* event)
+{
+    lv_obj_t* dropdown = lv_event_get_target(event);
+
+    // This triggers when a new option is selected
+    if(lv_event_get_code(event) == LV_EVENT_VALUE_CHANGED) 
+    {
+        int tag = (int) lv_obj_get_user_data(dropdown);
+        int selected = lv_dropdown_get_selected(dropdown);
+        Serial.printf("Dropdown selected index: %d\n", selected);
+
+        // Update current city or parameter based on which dropdown triggered the event
+        if(tag == 1)
+        {
+            set_current_param_id(selected);
+        } 
+        else if(tag == 2)
+        {
+            set_current_station_id(selected);
+        }
+
+        if(load_historical_data_from_smhi()) 
+        {
+            t3_bind_data_to_ui();
+        } 
+        else 
+        {
+            fill_dummy_historical_data();
+            t3_bind_data_to_ui();
+        }
+    }
+}
+
 
 // ------------------------------------------------------
 // UI setup
@@ -614,7 +660,18 @@ static void create_ui()
         lv_obj_set_style_text_font(label, &lv_font_montserrat_28, 0);
         lv_obj_align(label, LV_ALIGN_TOP_MID, 0, 5);
         apply_tile_colors(t4, label, /*dark=*/false);
-        create_dropdown_menu(t4);
+
+        // Dropdown menu to customize weather parameters
+        lv_obj_t* weather_menu = create_dropdown_menu(t4);
+        lv_dropdown_set_options(weather_menu, "Temperature\nHumidity\nWind speed\nAir pressure");
+        lv_obj_align(weather_menu, LV_ALIGN_CENTER, -100, 0);
+        lv_obj_set_user_data(weather_menu, (void*)1);
+
+        // Dropdown menu to choose city
+        lv_obj_t* city_menu = create_dropdown_menu(t4);
+        lv_dropdown_set_options(city_menu, "Karlskrona\nStockholm\nGothenburg\nMalmo\nKiruna");
+        lv_obj_align(city_menu, LV_ALIGN_CENTER, 100, 0);
+        lv_obj_set_user_data(city_menu, (void*)2);
     }
 }
 
