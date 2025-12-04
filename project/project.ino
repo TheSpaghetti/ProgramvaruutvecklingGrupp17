@@ -1,3 +1,8 @@
+#define LV_FONT_FMT_TXT_LARGE 1
+#define LV_USE_FONT_FMT_TXT 1
+#define LV_USE_UTF8 1
+#define LV_USE_FONT_CUSTOM 1
+
 #include <Arduino.h>
 #include <WiFi.h>
 #include <HTTPClient.h>
@@ -9,6 +14,9 @@
 #include <lvgl.h>
 #include <math.h>
 #include <string.h>
+
+#include "google_emoji.h"
+LV_FONT_DECLARE(google_emoji);
 
 // ------------------------
 // Forecast model
@@ -133,13 +141,13 @@ static const char* GROUP_NUMBER    = "Group 17";
 // SMHI symbol → simple UTF-8 icon mapping
 // ------------------------------------------------------
 static const char* smhi_symbol_to_icon(int code) {
-    if (code == 1)                 return "SUN";    // Clear
-    if (code == 2 || code == 3)    return "PART";   // Partly cloudy
-    if (code == 4 || code == 5)    return "CLOUD";  // Cloudy
-    if (code == 6 || code == 7)    return "RAIN";   // Rain
-    if (code == 8 || code == 9)    return "THDR";   // Thunderstorm
-    if (code == 10 || code == 11)  return "SNOW";   // Snow
-    return "?";
+    if (code == 1)                 return "☀";    // Clear
+    if (code == 2 || code == 3)    return "🌤";   // Partly cloudy
+    if (code == 4 || code == 5)    return "☁";  // Cloudy
+    if (code == 6 || code == 7)    return "🌧";   // Rain
+    if (code == 8 || code == 9)    return "🌩";   // Thunderstorm
+    if (code == 10 || code == 11)  return "🌨";   // Snow
+    return "No data";
 }
 
 
@@ -504,8 +512,13 @@ static bool load_historical_data_from_smhi()
 static void create_forecast_table(lv_obj_t* parent) {
     forecast_table = lv_table_create(parent);
 
-    lv_obj_set_size(forecast_table, lv_pct(100), lv_pct(80));
+    lv_obj_set_size(forecast_table, lv_pct(100), lv_pct(90));
     lv_obj_align(forecast_table, LV_ALIGN_BOTTOM_MID, 0, 0);
+
+    static lv_style_t table_style;
+    lv_style_init(&table_style);
+    lv_style_set_text_font(&table_style, &google_emoji);
+    lv_obj_add_style(forecast_table, &table_style, 0);
 
     // 3 columns: Day | Temp | Icon
     lv_table_set_col_cnt(forecast_table, 3);
@@ -516,10 +529,9 @@ static void create_forecast_table(lv_obj_t* parent) {
     lv_table_set_cell_value(forecast_table, 0, 1, "Temp");
     lv_table_set_cell_value(forecast_table, 0, 2, "Icon");
 
-    // Column widths
-    lv_table_set_col_width(forecast_table, 0, 80);
-    lv_table_set_col_width(forecast_table, 1, 80);
-    lv_table_set_col_width(forecast_table, 2, 80);
+    lv_table_set_col_width(forecast_table, 0, 190);
+    lv_table_set_col_width(forecast_table, 1, 190);
+    lv_table_set_col_width(forecast_table, 2, 190);
 }
 
 // ------------------------------------------------------
