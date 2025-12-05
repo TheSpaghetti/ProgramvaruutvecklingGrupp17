@@ -35,8 +35,9 @@ static lv_obj_t* dropdown = nullptr;
 // Wi-Fi credentials
 // (REMOVE before pushing to GitHub)
 // ------------------------
+
 static const char* WIFI_SSID     = "BTH_Guest";
-static const char* WIFI_PASSWORD = "papaya21turkos";
+static const char* WIFI_PASSWORD = "paprika45svart";
 
 // Cities: Karlskrona(65090), Stockholm(97400), Göteborg(72420), Malmö(53300), Kiruna(180940)
 
@@ -141,14 +142,64 @@ static const char* GROUP_NUMBER    = "Group 17";
 // SMHI symbol → simple UTF-8 icon mapping
 // ------------------------------------------------------
 static const char* smhi_symbol_to_icon(int code) {
-    if (code == 1)                 return "☀";    // Clear
-    if (code == 2 || code == 3)    return "🌤";   // Partly cloudy
-    if (code == 4 || code == 5)    return "☁";  // Cloudy
-    if (code == 6 || code == 7)    return "🌧";   // Rain
-    if (code == 8 || code == 9)    return "🌩";   // Thunderstorm
-    if (code == 10 || code == 11)  return "🌨";   // Snow
-    return "No data";
+    switch(code) {
+
+        // Clear
+        case 0:
+        case 1: return "☀";
+
+        // Partly cloudy
+        case 2:
+        case 3: return "🌤";
+
+        // Cloudy / overcast
+        case 4:
+        case 5: return "☁";
+
+        // Fog
+        case 6:
+        case 7: return "🌫";
+
+        // Rain showers
+        case 8:
+        case 9:
+        case 10: return "🌦";
+
+        // Thunderstorm
+        case 11:
+        case 21: return "⛈";
+
+        // Sleet showers
+        case 12:
+        case 13:
+        case 14: return "🌨";
+
+        // Snow showers
+        case 15:
+        case 16:
+        case 17: return "🌨";
+
+        // Continuous rain
+        case 18:
+        case 19:
+        case 20: return "🌧";
+
+        // Continuous sleet
+        case 22:
+        case 23:
+        case 24: return "🌨";
+
+        // Continuous snowfall
+        case 25:
+        case 26:
+        case 27: return "❄";
+
+        default:
+            Serial.printf("Unknown Wsymb2 code (UNEXPECTED): %d\n", code);
+            return "?";
+    }
 }
+
 
 
 // ------------------------------------------------------
@@ -553,34 +604,37 @@ static void dropdown_event(lv_event_t* event)
 {
     lv_obj_t* dropdown = lv_event_get_target(event);
 
-    // This triggers when a new option is selected
-    if(lv_event_get_code(event) == LV_EVENT_VALUE_CHANGED) 
+    if (lv_event_get_code(event) == LV_EVENT_VALUE_CHANGED)
     {
-        int tag = (int) lv_obj_get_user_data(dropdown);
+        int tag      = (int) lv_obj_get_user_data(dropdown);
         int selected = lv_dropdown_get_selected(dropdown);
         Serial.printf("Dropdown selected index: %d\n", selected);
 
-        // Update current city or parameter based on which dropdown triggered the event
-        if(tag == 1)
+        if (tag == 1)
         {
+            // Parameter dropdown (Temperature / Humidity / Wind / Pressure)
             set_current_param_id(selected);
-        } 
-        else if(tag == 2)
+        }
+        else if (tag == 2)
         {
-            set_current_station_id(selected);
+            // City dropdown (Karlskrona / Stockholm / Gothenburg / Malmo / Kiruna)
+            set_current_station_id(selected);   // updates current_city_index
+            update_t2_with_weather();           
         }
 
-        if(load_historical_data_from_smhi()) 
+        // Historical data always depends on both city and param
+        if (load_historical_data_from_smhi())
         {
             t3_bind_data_to_ui();
-        } 
-        else 
+        }
+        else
         {
             fill_dummy_historical_data();
             t3_bind_data_to_ui();
         }
     }
 }
+
 
 
 // ------------------------------------------------------
