@@ -130,12 +130,16 @@ static lv_obj_t* t3_chart  = nullptr;
 static lv_obj_t* t3_slider = nullptr;
 static lv_chart_series_t* t3_series = nullptr;
 
-static const int HIST_MAX_POINTS = 1028;
+static const int HIST_MAX_POINTS = 2160;
 static float hist_values[HIST_MAX_POINTS];
 static int   hist_count  = 0;   // how many valid points in hist_values[]
 static int   hist_window = 50;  // how many points to show at once
 
-static const char* PROGRAM_VERSION = "v.1.0.1";
+static lv_chart_series_t* t3_series_mean = nullptr;
+static float hist_mean = 0.0f;
+static lv_obj_t* t3_mean_label = nullptr;
+
+static const char* PROGRAM_VERSION = "v.1.1.0";
 static const char* GROUP_NUMBER    = "Group 17";
 
 // ------------------------------------------------------
@@ -233,27 +237,38 @@ static void t3_update_chart_window(int start_index)
     if (hist_count <= 0) return;
     if (hist_window <= 0) hist_window = 1;
 
-    // Clamp start so we don't read out of bounds
     if (start_index < 0) start_index = 0;
     if (start_index > hist_count - hist_window) {
         start_index = max(0, hist_count - hist_window);
     }
 
-    // Set chart point count to window size
     lv_chart_set_point_count(t3_chart, hist_window);
 
-    // Fill series by index instead of "clearing"
     for (int i = 0; i < hist_window; ++i) {
         int idx = start_index + i;
         lv_coord_t v = LV_CHART_POINT_NONE;
+
         if (idx < hist_count) {
             v = (lv_coord_t)hist_values[idx];
         }
+
+        // main data series
         lv_chart_set_value_by_id(t3_chart, t3_series, i, v);
+
+        // mean line series: constant at hist_mean
+        if (t3_series_mean && hist_count > 0) {
+            lv_chart_set_value_by_id(
+                t3_chart,
+                t3_series_mean,
+                i,
+                (lv_coord_t)hist_mean
+            );
+        }
     }
 
     lv_chart_refresh(t3_chart);
 }
+
 
 // Slider event: move window over data
 static void t3_slider_event_cb(lv_event_t* e)
@@ -519,6 +534,7 @@ static bool load_historical_data_from_smhi()
     hist_count = 0;
     float min_v = 1e9f;
     float max_v = -1e9f;
+    float sum_v = 0.0f; 
 
     for (int i = start_index; i < total && hist_count < HIST_MAX_POINTS; ++i) {
         JsonObject vobj = values[i].as<JsonObject>();
@@ -531,8 +547,26 @@ static bool load_historical_data_from_smhi()
         if (v < min_v) min_v = v;
         if (v > max_v) max_v = v;
 
+        sum_v += v;         
         hist_count++;
     }
+
+    if (hist_count == 0) {
+        Serial.println("load_historical_data_from_smhi: no valid numeric values");
+        return false;
+    }
+
+    // compute mean
+    hist_mean = sum_v / (float)hist_count;
+    Serial.print("Historical mean = ");
+    Serial.println(hist_mean);
+    if (t3_mean_label) {
+        char mean_buf[32];
+        snprintf(mean_buf, sizeof(mean_buf), "Mean: %.1f", hist_mean);
+        lv_label_set_text(t3_mean_label, mean_buf);
+}
+
+
 
     if (hist_count == 0) {
         Serial.println("load_historical_data_from_smhi: no valid numeric values");
@@ -702,11 +736,23 @@ static void create_ui()
         lv_chart_set_range(t3_chart, LV_CHART_AXIS_PRIMARY_Y, -10, 30);
 
         t3_series = lv_chart_add_series(t3_chart, lv_color_black(), LV_CHART_AXIS_PRIMARY_Y);
+        // Mean value line
+        t3_series_mean = lv_chart_add_series(
+            t3_chart,
+            lv_color_make(200, 0, 0),  
+            LV_CHART_AXIS_PRIMARY_Y
+        );
 
         lv_obj_t* title = lv_label_create(t3);
         lv_label_set_text(title, "Historical Data");
         lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
         lv_obj_align_to(title, t3_chart, LV_ALIGN_OUT_TOP_LEFT, 5, -10);
+        // Mean label
+        t3_mean_label = lv_label_create(t3);
+        lv_label_set_text(t3_mean_label, "Mean: --");
+        lv_obj_set_style_text_font(t3_mean_label, &lv_font_montserrat_20, 0);
+        lv_obj_align_to(t3_mean_label, t3_chart, LV_ALIGN_OUT_TOP_RIGHT, -5, -10);
+
 
         // Data position slider
         t3_slider = lv_slider_create(t3);
