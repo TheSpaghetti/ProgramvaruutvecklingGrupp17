@@ -14,6 +14,8 @@
 #include <lvgl.h>
 #include <math.h>
 #include <string.h>
+#include <Preferences.h>
+
 
 #include "google_emoji.h"
 LV_FONT_DECLARE(google_emoji);
@@ -36,8 +38,8 @@ static lv_obj_t* dropdown = nullptr;
 // (REMOVE before pushing to GitHub)
 // ------------------------
 
-static const char* WIFI_SSID     = "BTH_Guest";
-static const char* WIFI_PASSWORD = "paprika45svart";
+static const char* WIFI_SSID     = "Reverbs hörn";
+static const char* WIFI_PASSWORD = "Olofsson123";
 
 // Cities: Karlskrona(65090), Stockholm(97400), Göteborg(72420), Malmö(53300), Kiruna(180940)
 
@@ -110,6 +112,20 @@ static int set_current_param_id(int id) {
     return PARAM_IDS[current_param_index];
 }
 
+Preferences prefs;
+
+static const char* NVM_NAMESPACE   = "weatherapp";
+static const char* KEY_DEF_CITY    = "def_city";
+static const char* KEY_DEF_PARAM   = "def_param";
+
+// Sparade default-värden
+static int default_city_index  = 0; // 0..4
+static int default_param_index = 0; // 0..3
+
+// Pekare till dropdowns på Tile 4
+static lv_obj_t* dd_param = nullptr;
+static lv_obj_t* dd_city  = nullptr;
+
 LilyGo_Class amoled;
 
 // --- Tiles ---
@@ -132,12 +148,23 @@ static lv_chart_series_t* t3_series = nullptr;
 
 static const int HIST_MAX_POINTS = 2160;
 static float hist_values[HIST_MAX_POINTS];
+static String hist_dates[HIST_MAX_POINTS];
 static int   hist_count  = 0;   // how many valid points in hist_values[]
 static int   hist_window = 50;  // how many points to show at once
 
 static lv_chart_series_t* t3_series_mean = nullptr;
 static float hist_mean = 0.0f;
 static lv_obj_t* t3_mean_label = nullptr;
+
+// Datumspann för historiska data (för x-axel)
+static String hist_date_start;
+static String hist_date_end;
+
+// Axis labels för Tile 3
+static lv_obj_t* t3_label_yaxis   = nullptr;  // enhet (°C, %, m/s, hPa)
+static lv_obj_t* t3_label_xaxis   = nullptr;  // text "Date"
+static lv_obj_t* t3_label_x_start = nullptr;  // första datum
+static lv_obj_t* t3_label_x_end   = nullptr;  // sista datum
 
 static const char* PROGRAM_VERSION = "v.1.1.0";
 static const char* GROUP_NUMBER    = "Group 17";
@@ -266,9 +293,29 @@ static void t3_update_chart_window(int start_index)
         }
     }
 
+    // Uppdatera visat datumspann baserat på fönstret
+    if (hist_count > 0) {
+        int start_idx = start_index;
+        int end_idx   = start_index + hist_window - 1;
+        if (end_idx >= hist_count) end_idx = hist_count - 1;
+
+        if (start_idx >= 0 && start_idx < hist_count) {
+            hist_date_start = hist_dates[start_idx];
+        } else {
+            hist_date_start = "";
+        }
+
+        if (end_idx >= 0 && end_idx < hist_count) {
+            hist_date_end = hist_dates[end_idx];
+        } else {
+            hist_date_end = "";
+        }
+
+        update_axis_labels();
+    }
+
     lv_chart_refresh(t3_chart);
 }
-
 
 // Slider event: move window over data
 static void t3_slider_event_cb(lv_event_t* e)
@@ -305,10 +352,15 @@ static void fill_dummy_historical_data()
         // some sine-ish wave between -5 and +15
         float x = (float)i / 10.0f;
         hist_values[i] = 5.0f + 10.0f * sinf(x * 0.5f);
+        hist_dates[i]  = "";   // inga riktiga datum för dummy-data
     }
 
     // window size: up to 50 points or all if fewer
     hist_window = min(50, hist_count);
+
+    hist_date_start = "";
+    hist_date_end   = "";
+    update_axis_labels();
 }
 
 // Call this after data is loaded to init slider + chart content
@@ -325,6 +377,48 @@ static void t3_bind_data_to_ui()
 
     // Start showing latest window by default
     t3_update_chart_window(max_start);
+}
+
+// Uppdatera axel-etiketter (enhet + datumspann)
+static void update_axis_labels()
+{
+    // Y-axel: enhet beroende på current_param_index
+    if (t3_label_yaxis) {
+        const char* unit = "Value";
+        switch (current_param_index) {
+            case 0: unit = "°C";  break;   // Temperature
+            case 1: unit = "%";   break;   // Humidity
+            case 2: unit = "m/s"; break;   // Wind speed
+            case 3: unit = "hPa"; break;   // Pressure
+            default: break;
+        }
+        lv_label_set_text(t3_label_yaxis, unit);
+    }
+
+    // X-axel huvudtext
+    if (t3_label_xaxis) {
+        lv_label_set_text(t3_label_xaxis, "Date");
+    }
+
+    // Första/sista datum under grafen
+    if (t3_label_x_start) {
+        lv_label_set_text(
+            t3_label_x_start,
+            hist_date_start.length() ? hist_date_start.c_str() : ""
+        );
+    }
+    if (t3_label_x_end) {
+        lv_label_set_text(
+            t3_label_x_end,
+            hist_date_end.length() ? hist_date_end.c_str() : ""
+        );
+    }
+
+    // Debug: skriv ut vad vi *tror* datumen är
+    Serial.print("Axis labels: start=");
+    Serial.print(hist_date_start);
+    Serial.print(" end=");
+    Serial.println(hist_date_end);
 }
 
 // ------------------------------------------------------
@@ -544,6 +638,14 @@ static bool load_historical_data_from_smhi()
         float v = vobj["value"].as<float>();
         hist_values[hist_count] = v;
 
+        // Plocka datum för denna punkt
+        String iso = vobj["from"] | vobj["date"] | "";
+        if (iso.length() >= 10) {
+            hist_dates[hist_count] = iso.substring(5, 10);  // "MM-DD"
+        } else {
+            hist_dates[hist_count] = "";
+        }
+
         if (v < min_v) min_v = v;
         if (v > max_v) max_v = v;
 
@@ -586,6 +688,9 @@ static bool load_historical_data_from_smhi()
 
     Serial.print("Historical data loaded. hist_count = ");
     Serial.println(hist_count);
+
+  // Uppdatera axel-etiketter när nya data laddats
+    update_axis_labels();
 
     return true;
 }
@@ -669,7 +774,91 @@ static void dropdown_event(lv_event_t* event)
     }
 }
 
+// ------------------------------------------------------
+// Default-hantering (lagras i flash med Preferences)
+// ------------------------------------------------------
+static void load_defaults_from_nvm()
+{
+    if (!prefs.begin(NVM_NAMESPACE, true)) { // true = read-only
+        Serial.println("Preferences: failed to begin (read)");
+        return;
+    }
 
+    default_city_index  = prefs.getInt(KEY_DEF_CITY,  0);
+    default_param_index = prefs.getInt(KEY_DEF_PARAM, 0);
+
+    prefs.end();
+
+    if (default_city_index < 0 || default_city_index > 4) default_city_index = 0;
+    if (default_param_index < 0 || default_param_index > 3) default_param_index = 0;
+
+    Serial.printf("Loaded defaults: city=%d, param=%d\n",
+                  default_city_index, default_param_index);
+}
+
+static void save_defaults_to_nvm()
+{
+    if (!prefs.begin(NVM_NAMESPACE, false)) { // false = read/write
+        Serial.println("Preferences: failed to begin (write)");
+        return;
+    }
+
+    prefs.putInt(KEY_DEF_CITY,  current_city_index);
+    prefs.putInt(KEY_DEF_PARAM, current_param_index);
+
+    prefs.end();
+
+    default_city_index  = current_city_index;
+    default_param_index = current_param_index;
+
+    Serial.printf("Saved defaults: city=%d, param=%d\n",
+                  default_city_index, default_param_index);
+}
+
+static void apply_defaults_to_selection()
+{
+    // Använd sparade värden
+    current_city_index  = default_city_index;
+    current_param_index = default_param_index;
+
+    Serial.printf("Applying defaults: city=%d, param=%d\n",
+                  current_city_index, current_param_index);
+
+    // Uppdatera dropdowns om de finns
+    if (dd_param) {
+        lv_dropdown_set_selected(dd_param, current_param_index);
+    }
+    if (dd_city) {
+        lv_dropdown_set_selected(dd_city, current_city_index);
+    }
+
+    // Uppdatera Tile 2 (prognos)
+    update_t2_with_weather();
+
+    // Ladda historiska data för Tile 3
+    if (!load_historical_data_from_smhi()) {
+        Serial.println("Falling back to dummy data after applying defaults");
+        fill_dummy_historical_data();
+    }
+    t3_bind_data_to_ui();
+}
+
+// ------------------------------------------------------
+// Knappar på Tile 4 (spara/använd default)
+// ------------------------------------------------------
+static void save_default_btn_event_cb(lv_event_t* e)
+{
+    LV_UNUSED(e);
+    save_defaults_to_nvm();
+    Serial.println("Default settings saved.");
+}
+
+static void load_default_btn_event_cb(lv_event_t* e)
+{
+    LV_UNUSED(e);
+    apply_defaults_to_selection();
+    Serial.println("Default settings applied.");
+}
 
 // ------------------------------------------------------
 // UI setup
@@ -730,10 +919,47 @@ static void create_ui()
         lv_obj_set_size(t3_chart, lv_pct(95), lv_pct(65));
         lv_obj_align(t3_chart, LV_ALIGN_TOP_MID, 0, 50);
 
+        // --- Y-axel-etikett (enhet) ---
+        t3_label_yaxis = lv_label_create(t3);
+        lv_label_set_text(t3_label_yaxis, "Value");  // uppdateras senare av update_axis_labels()
+        lv_obj_set_style_text_font(t3_label_yaxis, &lv_font_montserrat_20, 0);
+        lv_obj_align(t3_label_yaxis, LV_ALIGN_LEFT_MID, 0, 0);
+
+        // --- X-axel-huvudetikett ---
+        t3_label_xaxis = lv_label_create(t3);
+        lv_label_set_text(t3_label_xaxis, "Date");
+        lv_obj_set_style_text_font(t3_label_xaxis, &lv_font_montserrat_20, 0);
+        lv_obj_align_to(t3_label_xaxis, t3_chart, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
+
+        // --- X-axel: första datum (vänster) ---
+        t3_label_x_start = lv_label_create(t3);
+        lv_label_set_text(t3_label_x_start, "");
+        lv_obj_set_style_text_font(t3_label_x_start, &lv_font_montserrat_18, 0);
+        lv_obj_align_to(t3_label_x_start, t3_chart, LV_ALIGN_OUT_BOTTOM_LEFT, 5, 5);
+
+        // --- X-axel: sista datum (höger) ---
+        t3_label_x_end = lv_label_create(t3);
+        lv_label_set_text(t3_label_x_end, "");
+        lv_obj_set_style_text_font(t3_label_x_end, &lv_font_montserrat_18, 0);
+        lv_obj_align_to(t3_label_x_end, t3_chart, LV_ALIGN_OUT_BOTTOM_RIGHT, -5, 5);
+
         lv_chart_set_type(t3_chart, LV_CHART_TYPE_LINE);
         lv_chart_set_div_line_count(t3_chart, 4, 4);
         lv_chart_set_update_mode(t3_chart, LV_CHART_UPDATE_MODE_SHIFT);
         lv_chart_set_range(t3_chart, LV_CHART_AXIS_PRIMARY_Y, -10, 30);
+
+        // Ge plats för Y-axelns siffror
+        lv_obj_set_style_pad_left(t3_chart, 60, 0);
+
+        // Aktivera skalsiffror på Y-axeln
+        lv_chart_set_axis_tick(
+            t3_chart,
+            LV_CHART_AXIS_PRIMARY_Y,
+            10, 5,   // längd på stora/små streck
+            6, 2,    // antal stora/små intervall
+            true,    // rita labels
+            50       // utrymme för labels
+        );
 
         t3_series = lv_chart_add_series(t3_chart, lv_color_black(), LV_CHART_AXIS_PRIMARY_Y);
         // Mean value line
@@ -763,7 +989,7 @@ static void create_ui()
         lv_obj_add_event_cb(t3_slider, t3_slider_event_cb, LV_EVENT_ALL, NULL);
     }
 
-    // --------------------------------------------------
+        // --------------------------------------------------
     // Tile 4 – Settings Screen
     // --------------------------------------------------
     {
@@ -774,16 +1000,36 @@ static void create_ui()
         apply_tile_colors(t4, label, /*dark=*/false);
 
         // Dropdown menu to customize weather parameters
-        lv_obj_t* weather_menu = create_dropdown_menu(t4);
-        lv_dropdown_set_options(weather_menu, "Temperature\nHumidity\nWind speed\nAir pressure");
-        lv_obj_align(weather_menu, LV_ALIGN_CENTER, -100, 0);
-        lv_obj_set_user_data(weather_menu, (void*)1);
+        dd_param = create_dropdown_menu(t4);
+        lv_dropdown_set_options(dd_param, "Temperature\nHumidity\nWind speed\nAir pressure");
+        lv_obj_align(dd_param, LV_ALIGN_CENTER, -100, 0);
+        lv_obj_set_user_data(dd_param, (void*)1);
 
         // Dropdown menu to choose city
-        lv_obj_t* city_menu = create_dropdown_menu(t4);
-        lv_dropdown_set_options(city_menu, "Karlskrona\nStockholm\nGothenburg\nMalmo\nKiruna");
-        lv_obj_align(city_menu, LV_ALIGN_CENTER, 100, 0);
-        lv_obj_set_user_data(city_menu, (void*)2);
+        dd_city = create_dropdown_menu(t4);
+        lv_dropdown_set_options(dd_city, "Karlskrona\nStockholm\nGothenburg\nMalmo\nKiruna");
+        lv_obj_align(dd_city, LV_ALIGN_CENTER, 100, 0);
+        lv_obj_set_user_data(dd_city, (void*)2);
+
+        // --- Button: Save current as default ---
+        lv_obj_t* btn_save = lv_btn_create(t4);
+        lv_obj_set_size(btn_save, 180, 50);
+        lv_obj_align(btn_save, LV_ALIGN_BOTTOM_LEFT, 20, -20);
+        lv_obj_add_event_cb(btn_save, save_default_btn_event_cb, LV_EVENT_CLICKED, NULL);
+
+        lv_obj_t* lbl_save = lv_label_create(btn_save);
+        lv_label_set_text(lbl_save, "Save default");
+        lv_obj_center(lbl_save);
+
+        // --- Button: Use default ---
+        lv_obj_t* btn_load = lv_btn_create(t4);
+        lv_obj_set_size(btn_load, 180, 50);
+        lv_obj_align(btn_load, LV_ALIGN_BOTTOM_RIGHT, -20, -20);
+        lv_obj_add_event_cb(btn_load, load_default_btn_event_cb, LV_EVENT_CLICKED, NULL);
+
+        lv_obj_t* lbl_load = lv_label_create(btn_load);
+        lv_label_set_text(lbl_load, "Use default");
+        lv_obj_center(lbl_load);
     }
 }
 
@@ -945,21 +1191,20 @@ void setup()
         while (true) delay(1000);
     }
 
-    beginLvglHelper(amoled);   // init LVGL for this board
+    beginLvglHelper(amoled);   // init LVGL för detta kort
 
-    
+    // 1) Läs sparade default-inställningar från flash
+    load_defaults_from_nvm();
+
+    // 2) Skapa UI
     create_ui();
+
+    // 3) Koppla upp WiFi
     connect_wifi();
-    update_t2_with_weather();
 
-    // Historical data for Tile 3
-    if (!load_historical_data_from_smhi()) {
-        Serial.println("Falling back to dummy historical data");
-        fill_dummy_historical_data();
-    }
-    t3_bind_data_to_ui();
-
-} 
+    // 4) Applicera defaultval (sätter dropdowns + hämtar väder + historik)
+    apply_defaults_to_selection();
+}
 
 void loop()
 {
