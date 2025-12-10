@@ -15,9 +15,12 @@
 #include <math.h>
 #include <string.h>
 #include <Preferences.h>
-
-
 #include "google_emoji.h"
+
+// Wi-Fi credentials
+static const char* WIFI_SSID     = "BTH_Guest";
+static const char* WIFI_PASSWORD = "plommon86silver";
+
 LV_FONT_DECLARE(google_emoji);
 
 // ------------------------
@@ -32,14 +35,6 @@ struct DailyForecast {
 static DailyForecast forecast[7];
 static lv_obj_t* forecast_table = nullptr;
 static lv_obj_t* dropdown = nullptr;
-
-// ------------------------
-// Wi-Fi credentials
-// (REMOVE before pushing to GitHub)
-// ------------------------
-
-static const char* WIFI_SSID     = "Reverbs hörn";
-static const char* WIFI_PASSWORD = "Olofsson123";
 
 // Cities: Karlskrona(65090), Stockholm(97400), Göteborg(72420), Malmö(53300), Kiruna(180940)
 
