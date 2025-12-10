@@ -166,6 +166,11 @@ static lv_obj_t* t3_label_xaxis   = nullptr;  // text "Date"
 static lv_obj_t* t3_label_x_start = nullptr;  // första datum
 static lv_obj_t* t3_label_x_end   = nullptr;  // sista datum
 
+// NYTT: info-label + index för aktuellt fönster
+static lv_obj_t* t3_slider_info = nullptr;
+static int current_window_start = 0;
+static int current_window_end   = 0;
+
 static const char* PROGRAM_VERSION = "v.1.1.0";
 static const char* GROUP_NUMBER    = "Group 17";
 
@@ -299,6 +304,10 @@ static void t3_update_chart_window(int start_index)
         int end_idx   = start_index + hist_window - 1;
         if (end_idx >= hist_count) end_idx = hist_count - 1;
 
+        // NYTT: spara aktuellt fönster globalt
+        current_window_start = start_idx;
+        current_window_end   = end_idx;
+
         if (start_idx >= 0 && start_idx < hist_count) {
             hist_date_start = hist_dates[start_idx];
         } else {
@@ -340,8 +349,39 @@ static void t3_slider_event_cb(lv_event_t* e)
     if (code == LV_EVENT_VALUE_CHANGED) {
         int pos = lv_slider_get_value(slider);
         t3_update_chart_window(pos);
+
+        // NYTT: uppdatera info-label med datum + värde
+        if (t3_slider_info && hist_count > 0) {
+            int idx = current_window_end;   // sista punkten i fönstret
+            if (idx < 0) idx = 0;
+            if (idx >= hist_count) idx = hist_count - 1;
+
+            const char* unit = "Value";
+            switch (current_param_index) {
+                case 0: unit = "°C";  break;  // Temperature
+                case 1: unit = "%";   break;  // Humidity
+                case 2: unit = "m/s"; break;  // Wind speed
+                case 3: unit = "hPa"; break;  // Pressure
+                default: break;
+            }
+
+            const char* date_str = hist_dates[idx].length()
+                       ? hist_dates[idx].c_str()
+                       : "no date";
+            char buf[64];
+            snprintf(
+                buf,
+                sizeof(buf),
+                "%s: %.1f %s",
+                date_str,
+                hist_values[idx],
+                unit
+            );
+            lv_label_set_text(t3_slider_info, buf);
+        }
     }
-}
+}           
+
 
 // Fill hist_values[] with dummy data so UI can be tested
 // (Replace later with real SMHI "latest-months" parsing)
@@ -597,11 +637,17 @@ static bool load_historical_data_from_smhi()
         return false;
     }
 
-    WiFiClient& stream = http.getStream();
-
-    DynamicJsonDocument doc(220000);
-    DeserializationError err = deserializeJson(doc, stream);
+    // Läs hela svaret som en String istället för att parsa direkt från streamen
+    String payload = http.getString();
     http.end();
+    
+    // Debug: skriv ut längden så vi ser att vi fått något rimligt
+    Serial.print("Hist payload length: ");
+    Serial.println(payload.length());
+
+    // Större buffer, metobs-json kan vara ganska stor
+    DynamicJsonDocument doc(400000);
+    DeserializationError err = deserializeJson(doc, payload);
 
     if (err) {
         Serial.print("JSON error (hist): ");
@@ -628,28 +674,66 @@ static bool load_historical_data_from_smhi()
     hist_count = 0;
     float min_v = 1e9f;
     float max_v = -1e9f;
-    float sum_v = 0.0f; 
-
+    float sum_v = 0.0f;
+    
     for (int i = start_index; i < total && hist_count < HIST_MAX_POINTS; ++i) {
         JsonObject vobj = values[i].as<JsonObject>();
         if (vobj.isNull()) continue;
         if (vobj["value"].isNull()) continue;
-
+        
+        // Själva mätvärdet
         float v = vobj["value"].as<float>();
         hist_values[hist_count] = v;
 
-        // Plocka datum för denna punkt
-        String iso = vobj["from"] | vobj["date"] | "";
-        if (iso.length() >= 10) {
-            hist_dates[hist_count] = iso.substring(5, 10);  // "MM-DD"
+        // ---- KONVERTERA "date" (Unix-ms) → "YYYY-MM-DD" ----
+        String dateLabel = "?";
+
+        // Läs date som long long (ms sedan 1970)
+        long long ms = 0;
+        if (!vobj["date"].isNull()) {
+            // ArduinoJson kan ge oss det direkt som 64-bitars integer
+            ms = vobj["date"].as<long long>();
+        }
+        
+        if (ms > 0) {
+            time_t secs = (time_t)(ms / 1000);  // ms → sekunder
+            struct tm * t = gmtime(&secs);      // UTC
+            
+            if (t) {
+                char buf[11];
+                // YYYY-MM-DD
+                snprintf(
+                    buf,
+                    sizeof(buf),
+                    "%04d-%02d-%02d",
+                    t->tm_year + 1900,
+                    t->tm_mon + 1,
+                    t->tm_mday
+                );
+                dateLabel = String(buf);
+            } else {
+                Serial.println("WARN: gmtime() returned null, using '?' as date");
+            }
         } else {
-            hist_dates[hist_count] = "";
+            Serial.println("WARN: no valid 'date' field, using '?' as date");
         }
 
+        // Spara datumetiketten
+        hist_dates[hist_count] = dateLabel;
+        
+        // Debug: skriv ut vad vi fick
+        Serial.print("Hist point ");
+        Serial.print(hist_count);
+        Serial.print(" -> '");
+        Serial.print(hist_dates[hist_count]);
+        Serial.print("' = ");
+        Serial.println(v);
+        
+        // Min/max + summa för medelvärde
         if (v < min_v) min_v = v;
         if (v > max_v) max_v = v;
-
-        sum_v += v;         
+        
+        sum_v += v;
         hist_count++;
     }
 
@@ -658,7 +742,7 @@ static bool load_historical_data_from_smhi()
         return false;
     }
 
-    // compute mean
+    // Beräkna medelvärde
     hist_mean = sum_v / (float)hist_count;
     Serial.print("Historical mean = ");
     Serial.println(hist_mean);
@@ -666,19 +750,12 @@ static bool load_historical_data_from_smhi()
         char mean_buf[32];
         snprintf(mean_buf, sizeof(mean_buf), "Mean: %.1f", hist_mean);
         lv_label_set_text(t3_mean_label, mean_buf);
-}
-
-
-
-    if (hist_count == 0) {
-        Serial.println("load_historical_data_from_smhi: no valid numeric values");
-        return false;
     }
 
-    // Set window size
+    // Fönsterstorlek (max 50 punkter eller alla om färre)
     hist_window = min(50, hist_count);
 
-    // Adjust Y-axis range based on actual data
+    // Justera Y-axelns range baserat på datan
     if (t3_chart) {
         int y_min = (int)floorf(min_v - 1.0f);
         int y_max = (int)ceilf (max_v + 1.0f);
@@ -689,13 +766,11 @@ static bool load_historical_data_from_smhi()
     Serial.print("Historical data loaded. hist_count = ");
     Serial.println(hist_count);
 
-  // Uppdatera axel-etiketter när nya data laddats
+    // Uppdatera axel-etiketter när nya data laddats
     update_axis_labels();
 
     return true;
 }
-
-
 // ------------------------------------------------------
 // Forecast table UI
 // ------------------------------------------------------
@@ -904,90 +979,89 @@ static void create_ui()
         create_forecast_table(t2);   // Forecast table now belongs to Tile 2
     }
 
-    // --------------------------------------------------
-    // Tile 3 – Historical Data
-    // --------------------------------------------------
-    {
-        // Prepare base style
-        lv_obj_t* tmp_label = lv_label_create(t3);
-        lv_label_set_text(tmp_label, "");
-        apply_tile_colors(t3, tmp_label, false);
-        lv_obj_del(tmp_label);
+// --------------------------------------------------
+// Tile 3 – Historical Data
+// --------------------------------------------------
+{
+    // Prepare base style
+    lv_obj_t* tmp_label = lv_label_create(t3);
+    lv_label_set_text(tmp_label, "");
+    apply_tile_colors(t3, tmp_label, false);
+    lv_obj_del(tmp_label);
 
-        // Temperature chart
-        t3_chart = lv_chart_create(t3);
-        lv_obj_set_size(t3_chart, lv_pct(95), lv_pct(65));
-        lv_obj_align(t3_chart, LV_ALIGN_TOP_MID, 0, 50);
+    // Hämta displaybredd för att ge plats åt Y-axelns labels
+    lv_coord_t scr_w = lv_disp_get_hor_res(NULL);
 
-        // --- Y-axel-etikett (enhet) ---
-        t3_label_yaxis = lv_label_create(t3);
-        lv_label_set_text(t3_label_yaxis, "Value");  // uppdateras senare av update_axis_labels()
-        lv_obj_set_style_text_font(t3_label_yaxis, &lv_font_montserrat_20, 0);
-        lv_obj_align(t3_label_yaxis, LV_ALIGN_LEFT_MID, 0, 0);
+    // Temperature chart
+    t3_chart = lv_chart_create(t3);
+    // NYTT: lämna ~40 px marginal till vänster så siffrorna syns
+    lv_obj_set_size(t3_chart, scr_w - 40, lv_pct(65));
+    lv_obj_align(t3_chart, LV_ALIGN_TOP_LEFT, 40, 50);
 
-        // --- X-axel-huvudetikett ---
-        t3_label_xaxis = lv_label_create(t3);
-        lv_label_set_text(t3_label_xaxis, "Date");
-        lv_obj_set_style_text_font(t3_label_xaxis, &lv_font_montserrat_20, 0);
-        lv_obj_align_to(t3_label_xaxis, t3_chart, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
+    // --- Y-axel-etikett (enhet) ---
+    t3_label_yaxis = lv_label_create(t3);
+    lv_label_set_text(t3_label_yaxis, "Value");  // uppdateras senare av update_axis_labels()
+    lv_obj_set_style_text_font(t3_label_yaxis, &lv_font_montserrat_20, 0);
+    // Placera enheten under grafen, till vänster
+    lv_obj_align_to(t3_label_yaxis, t3_chart, LV_ALIGN_OUT_BOTTOM_LEFT, 5, 10);
 
-        // --- X-axel: första datum (vänster) ---
-        t3_label_x_start = lv_label_create(t3);
-        lv_label_set_text(t3_label_x_start, "");
-        lv_obj_set_style_text_font(t3_label_x_start, &lv_font_montserrat_18, 0);
-        lv_obj_align_to(t3_label_x_start, t3_chart, LV_ALIGN_OUT_BOTTOM_LEFT, 5, 5);
+    // --- X-axel-huvudetikett ---
+    t3_label_xaxis = lv_label_create(t3);
+    lv_label_set_text(t3_label_xaxis, "Date");
+    lv_obj_set_style_text_font(t3_label_xaxis, &lv_font_montserrat_20, 0);
+    lv_obj_align_to(t3_label_xaxis, t3_chart, LV_ALIGN_OUT_BOTTOM_MID, 0, 10);
 
-        // --- X-axel: sista datum (höger) ---
-        t3_label_x_end = lv_label_create(t3);
-        lv_label_set_text(t3_label_x_end, "");
-        lv_obj_set_style_text_font(t3_label_x_end, &lv_font_montserrat_18, 0);
-        lv_obj_align_to(t3_label_x_end, t3_chart, LV_ALIGN_OUT_BOTTOM_RIGHT, -5, 5);
+    lv_chart_set_type(t3_chart, LV_CHART_TYPE_LINE);
+    lv_chart_set_div_line_count(t3_chart, 4, 4);
+    lv_chart_set_update_mode(t3_chart, LV_CHART_UPDATE_MODE_SHIFT);
+    lv_chart_set_range(t3_chart, LV_CHART_AXIS_PRIMARY_Y, -10, 30);
 
-        lv_chart_set_type(t3_chart, LV_CHART_TYPE_LINE);
-        lv_chart_set_div_line_count(t3_chart, 4, 4);
-        lv_chart_set_update_mode(t3_chart, LV_CHART_UPDATE_MODE_SHIFT);
-        lv_chart_set_range(t3_chart, LV_CHART_AXIS_PRIMARY_Y, -10, 30);
+    // NYTT: lite mindre inre padding nu när vi har yttre marginal
+    lv_obj_set_style_pad_left(t3_chart, 40, 0);
 
-        // Ge plats för Y-axelns siffror
-        lv_obj_set_style_pad_left(t3_chart, 60, 0);
+    // Aktivera skalsiffror på Y-axeln
+    lv_chart_set_axis_tick(
+        t3_chart,
+        LV_CHART_AXIS_PRIMARY_Y,
+        10, 5,   // längd på stora/små streck
+        6, 2,    // antal stora/små intervall
+        true,    // rita labels
+        50       // utrymme för labels
+    );
 
-        // Aktivera skalsiffror på Y-axeln
-        lv_chart_set_axis_tick(
-            t3_chart,
-            LV_CHART_AXIS_PRIMARY_Y,
-            10, 5,   // längd på stora/små streck
-            6, 2,    // antal stora/små intervall
-            true,    // rita labels
-            50       // utrymme för labels
-        );
+    t3_series = lv_chart_add_series(t3_chart, lv_color_black(), LV_CHART_AXIS_PRIMARY_Y);
+    // Mean value line
+    t3_series_mean = lv_chart_add_series(
+        t3_chart,
+        lv_color_make(200, 0, 0),  
+        LV_CHART_AXIS_PRIMARY_Y
+    );
 
-        t3_series = lv_chart_add_series(t3_chart, lv_color_black(), LV_CHART_AXIS_PRIMARY_Y);
-        // Mean value line
-        t3_series_mean = lv_chart_add_series(
-            t3_chart,
-            lv_color_make(200, 0, 0),  
-            LV_CHART_AXIS_PRIMARY_Y
-        );
+    lv_obj_t* title = lv_label_create(t3);
+    lv_label_set_text(title, "Historical Data");
+    lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
+    lv_obj_align_to(title, t3_chart, LV_ALIGN_OUT_TOP_LEFT, 5, -10);
 
-        lv_obj_t* title = lv_label_create(t3);
-        lv_label_set_text(title, "Historical Data");
-        lv_obj_set_style_text_font(title, &lv_font_montserrat_22, 0);
-        lv_obj_align_to(title, t3_chart, LV_ALIGN_OUT_TOP_LEFT, 5, -10);
-        // Mean label
-        t3_mean_label = lv_label_create(t3);
-        lv_label_set_text(t3_mean_label, "Mean: --");
-        lv_obj_set_style_text_font(t3_mean_label, &lv_font_montserrat_20, 0);
-        lv_obj_align_to(t3_mean_label, t3_chart, LV_ALIGN_OUT_TOP_RIGHT, -5, -10);
+    // Mean label
+    t3_mean_label = lv_label_create(t3);
+    lv_label_set_text(t3_mean_label, "Mean: --");
+    lv_obj_set_style_text_font(t3_mean_label, &lv_font_montserrat_20, 0);
+    lv_obj_align_to(t3_mean_label, t3_chart, LV_ALIGN_OUT_TOP_RIGHT, -5, -10);
 
+    // Data position slider
+    t3_slider = lv_slider_create(t3);
+    lv_obj_set_size(t3_slider, lv_pct(80), 35);
+    lv_obj_align(t3_slider, LV_ALIGN_BOTTOM_MID, 0, -25);
+    lv_obj_set_style_pad_all(t3_slider, 8, LV_PART_KNOB);
+    lv_slider_set_range(t3_slider, 0, 100);
+    lv_obj_add_event_cb(t3_slider, t3_slider_event_cb, LV_EVENT_ALL, NULL);
 
-        // Data position slider
-        t3_slider = lv_slider_create(t3);
-        lv_obj_set_size(t3_slider, lv_pct(80), 60);
-        lv_obj_align(t3_slider, LV_ALIGN_BOTTOM_MID, 0, -25);
-        lv_obj_set_style_pad_all(t3_slider, 15, LV_PART_KNOB);
-        lv_slider_set_range(t3_slider, 0, 100);
-        lv_obj_add_event_cb(t3_slider, t3_slider_event_cb, LV_EVENT_ALL, NULL);
-    }
+    // NYTT: info-label under slidern som visar datum + värde
+    t3_slider_info = lv_label_create(t3);
+    lv_label_set_text(t3_slider_info, "");
+    lv_obj_set_style_text_font(t3_slider_info, &lv_font_montserrat_18, 0);
+    lv_obj_align_to(t3_slider_info, t3_slider, LV_ALIGN_OUT_BOTTOM_MID, 0, 0);
+}
 
         // --------------------------------------------------
     // Tile 4 – Settings Screen
