@@ -166,7 +166,7 @@ static lv_obj_t* t3_slider_info = nullptr;
 static int current_window_start = 0;
 static int current_window_end   = 0;
 
-static const char* PROGRAM_VERSION = "v.1.1.0";
+static const char* PROGRAM_VERSION = "v.2.0.0";
 static const char* GROUP_NUMBER    = "Group 17";
 
 // ------------------------------------------------------
