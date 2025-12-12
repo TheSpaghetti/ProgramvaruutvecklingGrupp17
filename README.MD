@@ -1,15 +1,5 @@
 # PA1484 – Software Development: Project (Group 17)
 
-## Template information
-This template should help your team write a good README file for your project.
-(Your file should be named `README.md` in your project directory.) You are of
-course free to add more sections to your README if you want to.
-Readme-files on GitHub are formatted using Markdown. You can find information about
-how to format using Markdown here:
-https://docs.github.com/en/get-started/writing-on-github/getting-started-with-
-writing-and-formatting-on-github/basic-writing-and-formatting-syntax
-Your README file should include the at least the following sections:
-
 ## Introduction
 This project contains a weather dashboard built using PlatformIO for a LilyGO AMOLED device, powered by an ESP32 microcontroller. The system retrieves weather data from the SMHI API, presenting it on the devices touchscreen display.  
 The goal of this project is to deliver an intuitive way to check current weather conditions, forecasts and past weather pattern on a LilyGO display.  
@@ -24,49 +14,44 @@ The projects main functionalities include:
 ## Getting started
 This project will work regardless of the operating system you use, with separate guides for each below. Each of these tutorials is done on a fresh install of Visual Studio Code, which is the IDE you must use to complete this project.
 
-### General
-1. Install Visual Studio Code
-   * Visit [Visual Studio Code's website](https://code.visualstudio.com/download) and download the latest version or use the package manager of your system.
-   * Run `Visual Studio Code` and follow the steps.
-2. Install the correct extension.
-   * Head over to the extensions tab on your left.
-   * Search for ["PlatformIO IDE"](https://marketplace.visualstudio.com/items?itemName=platformio.platformio-ide) and install it.
-
-### Windows
-3. Install the Clang compiler and C++ extension for Visual Studio Code.
-   * (optional) If you want/need to use Windows Subsystem for Linux (WSL) have at the [documentation](https://code.visualstudio.com/docs/remote/wsl).
-
-### Linux
-3. Install the Clang compiler and C++ extension for Visual Studio Code.
-4. Run the following command to add access to the `ttyACM0` port in order to avoid complications [1]
+### Prerequisites
+1. Install Git for your device.
+2. Install and run [Visual Studio Code](https://code.visualstudio.com/download).
+3. In VS Code, install the ["PlatformIO IDE"](https://marketplace.visualstudio.com/items?itemName=platformio.platformio-ide) extension.
+4. (Windows/Linux only) Install the Clang compiler and C++ extension for Visual Studio Code.
+5. (Linux only) Run the following command to add access to the `ttyACM0` port in order to avoid complications:
    * `sudo adduser $USER $(stat --format="%G" /dev/ttyACM0 )`
 
-### MacOS
-3. Run `git -v` in the Terminal app to check whether git and the macOS command line tools are installed. If the command line tools are not installed, a pop up will appear to install it.
-
-## How to run the program
-1. Open the locally cloned repository with Visual Studio Code
+### How to upload this program to the device
+1. Clone this repository.
+2. Open the locally cloned repository with Visual Studio Code
     * If the "Do you trust the authors of the files in this folder?" dialog appears, click on "Yes, I trust the authors"
-2. Open up the file `project/project.ino`
-3. Connect your ESP32 to your computer via a USB cable.
-4. Build and upload the project to the device. See screenshot.
+3. Open up the file `project/project.ino`
+4. Change ´WIFI_SSID´ and ´WIFI_PASSWORD´ values to your Wi-Fi name and password.
+4. Connect your ESP32 to your computer via a USB cable.
+5. Build and upload the project to the device. See screenshot and the instructions below to put your device in download mode:
+   1. Press and hold the **BOOT** button , While still pressing the **BOOT** button
+   2. Release the **RST** button
+   3. Release the **BOOT** button
+   4. The USB port should be fixed and will not flash again. You can click Upload.
+   5. Press the **RST** button to exit download mode
 
 ![[screenshot](./assets/screenshot.png)](./assets/screenshot.png)
 
 ---
 
-
-
-### Prerequisites
-### Installation
-
-## Building and running
-This is where you explain how to make the project run.
-Examples of things to describe:
-- How to build/upload the program to the ESP32
-- What your startup procedure looks like
-- If the program accepts different arguments or modes
-- How to operate the program (e.g., touchscreen interaction)
+### Using the device
+After the program has been uploaded the device can be disconnected from your device and can run as long as it is connected to power.  
+If the device needs to run in a different location or your Wi-Fi credentials have changed then the program needs to be updated accordingly and uploaded again.  
+The program is operated via touchscreen interaction and has four different views, these can be viewed via swiping left or right on the device.
+1. The first screen contains the version number and developer information.
+2. Swiping right on the first screen shows a second screen that contains a seven day weather forcast.
+3. Swiping right again shows the third screen that contains a historical graph for weather data.
+    * The graph can be navigated via touchscreen input on the slider at the bottom.
+4. Swiping right yet again shows the final fourth screen, where settings for weather data can be configured.
+    * Pressing on the data type or city opens a dropdown menu, where they can be changed to other options.
+    * Pressing the **Save default** button will save the currently selected data type and city as the default on the device.
+    * Pressing the **Use default** button will load the default data type and city.
 
 ## Features
 A list of complete and excluded features.
@@ -108,6 +93,6 @@ that they are retained even after a restart.
 Sweden.
 - [ ] **US5.2**: As a user, I want to see the temperature forecast for each administrative area
 of Sweden (“Landskap”) on a map, with:
-o A Color-coded temperature zone per each administrative area, using the
+* A Color-coded temperature zone per each administrative area, using the
 center of each area to access the forecast.
-o A looped animation displaying the hourly forecast for the next 24 hours.
+* A looped animation displaying the hourly forecast for the next 24 hours.
