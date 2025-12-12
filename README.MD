@@ -11,8 +11,8 @@ writing-and-formatting-on-github/basic-writing-and-formatting-syntax
 Your README file should include the at least the following sections:
 
 ## Introduction
-This project contains a weather dashboard built using PlatformIO for a LilyGO AMOLED device, powered by an ESP32 microcontroller. The system retrieves weather data from the SMHI API, presenting it on the devices touchscreen display.
-The goal of this project is to deliver an intuitive way to check current weather conditions, forecasts and past weather pattern on a LilyGO display.
+This project contains a weather dashboard built using PlatformIO for a LilyGO AMOLED device, powered by an ESP32 microcontroller. The system retrieves weather data from the SMHI API, presenting it on the devices touchscreen display.  
+The goal of this project is to deliver an intuitive way to check current weather conditions, forecasts and past weather pattern on a LilyGO display.  
 The projects main functionalities include:
 - Data fetching via Wi-Fi from SMHI
 - Interactive touchscreen navigation
@@ -22,9 +22,41 @@ The projects main functionalities include:
 - Configurable default settings and persistant device memory
 
 ## Getting started
-This section should guide a new developer through the steps of how to set up the
-project and install the dependencies they need to start developing.
-It can include:
+This project will work regardless of the operating system you use, with separate guides for each below. Each of these tutorials is done on a fresh install of Visual Studio Code, which is the IDE you must use to complete this project.
+
+### General
+1. Install Visual Studio Code
+   * Visit [Visual Studio Code's website](https://code.visualstudio.com/download) and download the latest version or use the package manager of your system.
+   * Run `Visual Studio Code` and follow the steps.
+2. Install the correct extension.
+   * Head over to the extensions tab on your left.
+   * Search for ["PlatformIO IDE"](https://marketplace.visualstudio.com/items?itemName=platformio.platformio-ide) and install it.
+
+### Windows
+3. Install the Clang compiler and C++ extension for Visual Studio Code.
+   * (optional) If you want/need to use Windows Subsystem for Linux (WSL) have at the [documentation](https://code.visualstudio.com/docs/remote/wsl).
+
+### Linux
+3. Install the Clang compiler and C++ extension for Visual Studio Code.
+4. Run the following command to add access to the `ttyACM0` port in order to avoid complications [1]
+   * `sudo adduser $USER $(stat --format="%G" /dev/ttyACM0 )`
+
+### MacOS
+3. Run `git -v` in the Terminal app to check whether git and the macOS command line tools are installed. If the command line tools are not installed, a pop up will appear to install it.
+
+## How to run the program
+1. Open the locally cloned repository with Visual Studio Code
+    * If the "Do you trust the authors of the files in this folder?" dialog appears, click on "Yes, I trust the authors"
+2. Open up the file `project/project.ino`
+3. Connect your ESP32 to your computer via a USB cable.
+4. Build and upload the project to the device. See screenshot.
+
+![[screenshot](./assets/screenshot.png)](./assets/screenshot.png)
+
+---
+
+
+
 ### Prerequisites
 ### Installation
 
