@@ -11,12 +11,15 @@ writing-and-formatting-on-github/basic-writing-and-formatting-syntax
 Your README file should include the at least the following sections:
 
 ## Introduction
-This part should give a general introduction to your project. Briefly describe your
-project:
-- What the system does
-- What problem it solves
-- What technologies it uses (ESP32, touchscreen, SMHI API, PlatformIO)
-- What the main functionality is
+This project contains a weather dashboard built using PlatformIO for a LilyGO AMOLED device, powered by an ESP32 microcontroller. The system retrieves weather data from the SMHI API, presenting it on the devices touchscreen display.
+The goal of this project is to deliver an intuitive way to check current weather conditions, forecasts and past weather pattern on a LilyGO display.
+The projects main functionalities include:
+- Data fetching via Wi-Fi from SMHI
+- Interactive touchscreen navigation
+- A seven day weather forecast
+- A graph showing the past 90 days of weather data
+- Configurable data types (temperature, humidity, etc) and weather data locations (Karlskrona, Stockholm, etc)
+- Configurable default settings and persistant device memory
 
 ## Getting started
 This section should guide a new developer through the steps of how to set up the
